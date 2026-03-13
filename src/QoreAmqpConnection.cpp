@@ -102,17 +102,23 @@ void QoreAmqpConnection::Handler::on_container_start(proton::container& c) {
 }
 
 void QoreAmqpConnection::Handler::on_connection_open(proton::connection& c) {
-    std::lock_guard<std::mutex> lock(conn_.connect_mutex_);
-    conn_.connection_ = c;
-    conn_.work_queue_ = &c.work_queue();
+    {
+        std::lock_guard<std::mutex> lock(conn_.wq_mutex_);
+        conn_.connection_ = c;
+        conn_.work_queue_ = &c.work_queue();
+    }
     conn_.connected_ = true;
+    std::lock_guard<std::mutex> lock(conn_.connect_mutex_);
     conn_.connect_error_.clear();
     conn_.connect_cv_.notify_all();
 }
 
 void QoreAmqpConnection::Handler::on_connection_close(proton::connection& c) {
     conn_.connected_ = false;
-    conn_.work_queue_ = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(conn_.wq_mutex_);
+        conn_.work_queue_ = nullptr;
+    }
 
     // Wake up any waiting receivers
     {
@@ -391,13 +397,16 @@ QoreAmqpConnection::QoreAmqpConnection(const QoreHashNode* options, ExceptionSin
 QoreAmqpConnection::~QoreAmqpConnection() {
     // Ensure the container thread is stopped
     closing_ = true;
-    if (connected_ && work_queue_) {
-        try {
-            work_queue_->add([this]() {
-                connection_.close();
-            });
-        } catch (...) {
-            // Ignore errors during cleanup
+    {
+        std::lock_guard<std::mutex> lock(wq_mutex_);
+        if (connected_ && work_queue_) {
+            try {
+                work_queue_->add([this]() {
+                    connection_.close();
+                });
+            } catch (...) {
+                // Ignore errors during cleanup
+            }
         }
     }
     if (container_thread_.joinable()) {
@@ -455,14 +464,17 @@ void QoreAmqpConnection::close(ExceptionSink* xsink) {
 
     closing_ = true;
 
-    if (work_queue_) {
-        try {
-            work_queue_->add([this]() {
-                connection_.close();
-            });
-        } catch (const std::exception& e) {
-            xsink->raiseException("AMQP-CONNECTION-ERROR", "error closing connection: %s",
-                e.what());
+    {
+        std::lock_guard<std::mutex> lock(wq_mutex_);
+        if (work_queue_) {
+            try {
+                work_queue_->add([this]() {
+                    connection_.close();
+                });
+            } catch (const std::exception& e) {
+                xsink->raiseException("AMQP-CONNECTION-ERROR",
+                    "error closing connection: %s", e.what());
+            }
         }
     }
 
@@ -501,7 +513,7 @@ QoreStringNode* QoreAmqpConnection::createSender(const char* address, const Qore
     bool done = false;
     std::string error;
 
-    work_queue_->add([&, this]() {
+    if (!scheduleWork([&, this]() {
         try {
             proton::sender_options so;
             proton::target_options to;
@@ -521,7 +533,9 @@ QoreStringNode* QoreAmqpConnection::createSender(const char* address, const Qore
         std::lock_guard<std::mutex> lock(mtx);
         done = true;
         cv.notify_all();
-    });
+    }, xsink)) {
+        return nullptr;
+    }
 
     std::unique_lock<std::mutex> lock(mtx);
     cv.wait(lock, [&done]() { return done; });
@@ -580,7 +594,7 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
     bool done = false;
     std::string error;
 
-    work_queue_->add([&, this]() {
+    if (!scheduleWork([&, this]() {
         try {
             proton::receiver_options ro;
             proton::source_options so;
@@ -626,7 +640,9 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
         std::lock_guard<std::mutex> lock(mtx);
         done = true;
         cv.notify_all();
-    });
+    }, xsink)) {
+        return nullptr;
+    }
 
     std::unique_lock<std::mutex> lock(mtx);
     cv.wait(lock, [&done]() { return done; });
@@ -688,10 +704,11 @@ QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMe
     std::string tracker_key;
     std::mutex mtx;
     std::condition_variable cv;
+    bool done = false;
     bool sent = false;
     std::string error;
 
-    work_queue_->add([&, this]() {
+    if (!scheduleWork([&, this]() {
         try {
             proton::tracker t = sender.send(pmsg);
             // Use tracker tag as key
@@ -701,12 +718,15 @@ QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMe
             error = e.what();
         }
         std::lock_guard<std::mutex> lock(mtx);
+        done = true;
         cv.notify_all();
-    });
+    }, xsink)) {
+        return nullptr;
+    }
 
     {
         std::unique_lock<std::mutex> lock(mtx);
-        cv.wait(lock, [&sent, &error]() { return sent || !error.empty(); });
+        cv.wait(lock, [&done]() { return done; });
     }
 
     if (!error.empty()) {
@@ -810,9 +830,9 @@ void QoreAmqpConnection::accept(const BinaryNode* delivery_tag, ExceptionSink* x
         pending_deliveries_.erase(it);
     }
 
-    work_queue_->add([delivery]() mutable {
+    scheduleWork([delivery]() mutable {
         delivery.accept();
-    });
+    }, xsink);
 }
 
 void QoreAmqpConnection::reject(const BinaryNode* delivery_tag, ExceptionSink* xsink) {
@@ -834,9 +854,9 @@ void QoreAmqpConnection::reject(const BinaryNode* delivery_tag, ExceptionSink* x
         pending_deliveries_.erase(it);
     }
 
-    work_queue_->add([delivery]() mutable {
+    scheduleWork([delivery]() mutable {
         delivery.reject();
-    });
+    }, xsink);
 }
 
 void QoreAmqpConnection::release(const BinaryNode* delivery_tag, ExceptionSink* xsink) {
@@ -858,9 +878,9 @@ void QoreAmqpConnection::release(const BinaryNode* delivery_tag, ExceptionSink* 
         pending_deliveries_.erase(it);
     }
 
-    work_queue_->add([delivery]() mutable {
+    scheduleWork([delivery]() mutable {
         delivery.release();
-    });
+    }, xsink);
 }
 
 void QoreAmqpConnection::modify(const BinaryNode* delivery_tag, bool failed, bool undeliverable,
@@ -883,11 +903,11 @@ void QoreAmqpConnection::modify(const BinaryNode* delivery_tag, bool failed, boo
         pending_deliveries_.erase(it);
     }
 
-    work_queue_->add([delivery]() mutable {
+    scheduleWork([delivery]() mutable {
         // proton 0.40 delivery.modify() takes no arguments;
         // the MODIFIED state signals the broker to redeliver
         delivery.modify();
-    });
+    }, xsink);
 }
 
 void QoreAmqpConnection::beginTransaction(ExceptionSink* xsink) {
@@ -970,7 +990,7 @@ QoreStringNode* QoreAmqpConnection::createDurableReceiver(const char* address,
     bool done = false;
     std::string error;
 
-    work_queue_->add([&, this]() {
+    if (!scheduleWork([&, this]() {
         try {
             proton::receiver_options ro;
             proton::source_options so;
@@ -1011,7 +1031,9 @@ QoreStringNode* QoreAmqpConnection::createDurableReceiver(const char* address,
         std::lock_guard<std::mutex> lock(mtx);
         done = true;
         cv.notify_all();
-    });
+    }, xsink)) {
+        return nullptr;
+    }
 
     std::unique_lock<std::mutex> lock(mtx);
     cv.wait(lock, [&done]() { return done; });
@@ -1046,9 +1068,9 @@ void QoreAmqpConnection::closeDurableReceiver(const char* receiver_name, Excepti
     }
 
     // Close the receiver without detaching (keeps the subscription)
-    work_queue_->add([receiver]() mutable {
+    scheduleWork([receiver]() mutable {
         receiver.close();
-    });
+    }, xsink);
 }
 
 void QoreAmqpConnection::unsubscribeDurable(const char* subscription_name, ExceptionSink* xsink) {
@@ -1065,9 +1087,14 @@ void QoreAmqpConnection::unsubscribeDurable(const char* subscription_name, Excep
         if (it != receivers_.end()) {
             proton::receiver r = it->second;
             receivers_.erase(it);
-            work_queue_->add([r]() mutable {
-                r.detach();
-            });
+            {
+                std::lock_guard<std::mutex> lock(wq_mutex_);
+                if (work_queue_) {
+                    work_queue_->add([r]() mutable {
+                        r.detach();
+                    });
+                }
+            }
         }
     }
 
@@ -1078,7 +1105,7 @@ void QoreAmqpConnection::unsubscribeDurable(const char* subscription_name, Excep
     bool done = false;
     std::string error;
 
-    work_queue_->add([&, this]() {
+    if (!scheduleWork([&, this]() {
         try {
             proton::receiver_options ro;
             proton::source_options so;
@@ -1096,7 +1123,9 @@ void QoreAmqpConnection::unsubscribeDurable(const char* subscription_name, Excep
         std::lock_guard<std::mutex> lock(mtx);
         done = true;
         cv.notify_all();
-    });
+    }, xsink)) {
+        return;
+    }
 
     std::unique_lock<std::mutex> lock(mtx);
     cv.wait(lock, [&done]() { return done; });
@@ -1205,7 +1234,7 @@ QoreHashNode* QoreAmqpConnection::managementRequest(const std::string& operation
             bool done = false;
             std::string error;
 
-            work_queue_->add([&, this]() {
+            if (!scheduleWork([&, this]() {
                 try {
                     // Create sender to $management
                     mgmt_sender_ = connection_.open_sender("$management");
@@ -1224,7 +1253,9 @@ QoreHashNode* QoreAmqpConnection::managementRequest(const std::string& operation
                 std::lock_guard<std::mutex> lock(mtx);
                 done = true;
                 cv.notify_all();
-            });
+            }, xsink)) {
+                return nullptr;
+            }
 
             std::unique_lock<std::mutex> lock2(mtx);
             cv.wait(lock2, [&done]() { return done; });
@@ -1253,7 +1284,7 @@ QoreHashNode* QoreAmqpConnection::managementRequest(const std::string& operation
     std::string error;
     proton::message response;
 
-    work_queue_->add([&, this]() {
+    if (!scheduleWork([&, this]() {
         try {
             mgmt_sender_.send(request);
         } catch (const std::exception& e) {
@@ -1262,7 +1293,9 @@ QoreHashNode* QoreAmqpConnection::managementRequest(const std::string& operation
             done = true;
             cv.notify_all();
         }
-    });
+    }, xsink)) {
+        return nullptr;
+    }
 
     // Wait for response with timeout
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -1301,11 +1334,13 @@ QoreHashNode* QoreAmqpConnection::managementRequest(const std::string& operation
     // Convert response body to QoreHashNode
     QoreValue body = QoreAmqpHelper::protonToQore(response.body(), xsink);
     if (*xsink) {
+        body.discard(xsink);
         return nullptr;
     }
 
     if (body.getType() == NT_HASH) {
-        return body.get<QoreHashNode>()->hashRefSelf();
+        // Transfer the reference directly — QoreValue does not auto-deref
+        return body.get<QoreHashNode>();
     }
 
     // If not a hash, wrap it

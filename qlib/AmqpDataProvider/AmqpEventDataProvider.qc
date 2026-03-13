@@ -110,6 +110,9 @@ public class AmqpEventDataProvider inherits AbstractDataProvider, DelayedObserva
 
         #! Stop flag
         bool m_stop = False;
+
+        #! Receive loop running flag (guards against multiple background threads)
+        bool m_running = False;
     }
 
     #! Creates the event data provider
@@ -145,6 +148,10 @@ public class AmqpEventDataProvider inherits AbstractDataProvider, DelayedObserva
 
     #! Called when observers are ready to receive events
     observersReady() {
+        if (m_running) {
+            return;
+        }
+        m_running = True;
         # Start receiving in a background thread
         background receiveLoop();
     }
@@ -152,6 +159,7 @@ public class AmqpEventDataProvider inherits AbstractDataProvider, DelayedObserva
     #! Stops event delivery
     stopEvents() {
         m_stop = True;
+        m_running = False;
     }
 
     #! Returns static provider info
@@ -180,9 +188,11 @@ public class AmqpEventDataProvider inherits AbstractDataProvider, DelayedObserva
                 if (m_stop) {
                     break;
                 }
-                # Log error but continue receiving
+                stderr.printf("AmqpEventDataProvider %s: %s: %s\n",
+                    m_address, ex.err, ex.desc);
             }
         }
+        m_running = False;
     }
 }
 

@@ -171,6 +171,26 @@ private:
     //! Ensure the connection is open, raising an exception if not
     DLLLOCAL bool checkConnected(ExceptionSink* xsink) const;
 
+    //! Safely schedule work on the proton work queue; returns false and raises
+    //! an exception if the connection is closed or the work queue is unavailable.
+    template <typename F>
+    DLLLOCAL bool scheduleWork(F&& fn, ExceptionSink* xsink) {
+        std::lock_guard<std::mutex> lock(wq_mutex_);
+        if (!work_queue_) {
+            xsink->raiseException("AMQP-CONNECTION-ERROR",
+                "connection is closed; cannot schedule work");
+            return false;
+        }
+        try {
+            work_queue_->add(std::forward<F>(fn));
+        } catch (const std::exception& e) {
+            xsink->raiseException("AMQP-CONNECTION-ERROR",
+                "failed to schedule work: %s", e.what());
+            return false;
+        }
+        return true;
+    }
+
     //! Send an AMQP management request and receive a response
     DLLLOCAL QoreHashNode* managementRequest(const std::string& operation,
         const std::string& type, const std::string& name, ExceptionSink* xsink);
@@ -202,8 +222,9 @@ private:
     std::unique_ptr<proton::container> container_;
     std::thread container_thread_;
 
-    // Connection state
+    // Connection state (work_queue_ protected by wq_mutex_)
     proton::connection connection_;
+    mutable std::mutex wq_mutex_;
     proton::work_queue* work_queue_ = nullptr;
     std::atomic<bool> connected_{false};
     std::atomic<bool> closing_{false};
