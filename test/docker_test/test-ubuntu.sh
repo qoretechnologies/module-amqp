@@ -25,6 +25,9 @@ echo "export QORE_GID=999" >> ${ENV_FILE}
 
 export MAKE_JOBS=4
 
+# install SASL modules required for proton PLAIN authentication
+apt-get update -qq && apt-get install -y -qq libsasl2-modules > /dev/null 2>&1
+
 # build module and install
 echo && echo "-- building module --"
 mkdir -p ${MODULE_SRC_DIR}/build
@@ -59,6 +62,10 @@ chown -R qore:qore ${MODULE_SRC_DIR}
 # run the tests
 export QORE_MODULE_DIR=${MODULE_SRC_DIR}/qlib:${QORE_MODULE_DIR}
 cd ${MODULE_SRC_DIR}
+FAILED=0
 for test in test/*.qtest; do
-    gosu qore:qore env AMQP_TEST_URL="${AMQP_TEST_URL}" qore --enable-debug $test -vv
+    if ! gosu qore:qore env AMQP_TEST_URL="${AMQP_TEST_URL}" qore --enable-debug $test -vv; then
+        FAILED=1
+    fi
 done
+exit $FAILED
