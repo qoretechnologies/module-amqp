@@ -171,6 +171,57 @@ private:
     //! Ensure the connection is open, raising an exception if not
     DLLLOCAL bool checkConnected(ExceptionSink* xsink) const;
 
+    //! Check network security access for the configured URL
+    /** Checks with QoreNetworkSecurityManager before allowing a connection.
+        @return true if access is allowed, false if denied (exception raised)
+    */
+    DLLLOCAL bool checkNetworkAccess(ExceptionSink* xsink) const;
+
+    //! Wait on a condition variable with cooperative cancellation
+    /** Polls every QORE_IO_POLL_INTERVAL_MS, checking qore_check_cancel().
+        @param mtx the mutex (must be locked by caller via unique_lock)
+        @param cv the condition variable
+        @param pred predicate that returns true when done
+        @param timeout_ms maximum wait time (-1 for no timeout)
+        @param operation description for cancellation messages
+        @param xsink exception sink
+        @return true if pred became true, false on timeout or cancellation
+    */
+    template <typename Pred>
+    DLLLOCAL bool waitWithCancel(std::unique_lock<std::mutex>& lock,
+            std::condition_variable& cv, Pred pred, int timeout_ms,
+            const char* operation, ExceptionSink* xsink) {
+        auto deadline = timeout_ms >= 0
+            ? std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms)
+            : std::chrono::steady_clock::time_point::max();
+
+        while (!pred()) {
+            auto wait_until = std::min(deadline,
+                std::chrono::steady_clock::now()
+                    + std::chrono::milliseconds(QORE_IO_POLL_INTERVAL_MS));
+
+            cv.wait_until(lock, wait_until);
+
+            if (pred()) {
+                return true;
+            }
+
+            // Check timeout
+            if (timeout_ms >= 0 && std::chrono::steady_clock::now() >= deadline) {
+                return false;
+            }
+
+            // Check cooperative cancellation (unlock to avoid holding lock during xsink ops)
+            lock.unlock();
+            if (qore_check_cancel(xsink, operation)) {
+                lock.lock();
+                return false;
+            }
+            lock.lock();
+        }
+        return true;
+    }
+
     //! Safely schedule work on the proton work queue; returns false and raises
     //! an exception if the connection is closed or the work queue is unavailable.
     template <typename F>

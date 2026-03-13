@@ -101,6 +101,13 @@ public:
     //! Format a proton error message for Qore exceptions
     DLLLOCAL static std::string formatError(const std::string& prefix, const std::string& msg);
 
+    //! Parse an AMQP URL to extract hostname and port
+    /** @param url the AMQP URL (amqp://... or amqps://...)
+        @param host output: the hostname
+        @param port output: the port number (defaults to 5672 for amqp, 5671 for amqps)
+    */
+    DLLLOCAL static void parseUrlHostPort(const std::string& url, std::string& host, int& port);
+
 private:
     QoreAmqpHelper() = delete;
 };

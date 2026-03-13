@@ -535,3 +535,60 @@ QoreHashNode* QoreAmqpHelper::annotationMapToHash(const proton::message::annotat
 std::string QoreAmqpHelper::formatError(const std::string& prefix, const std::string& msg) {
     return prefix + ": " + msg;
 }
+
+void QoreAmqpHelper::parseUrlHostPort(const std::string& url, std::string& host, int& port) {
+    // URL format: amqp[s]://[user[:password]@]host[:port][/path]
+    bool tls = (url.substr(0, 5) == "amqps");
+    port = tls ? 5671 : 5672;
+
+    // Find the authority part (after "://")
+    size_t auth_start = url.find("://");
+    if (auth_start == std::string::npos) {
+        host = "localhost";
+        return;
+    }
+    auth_start += 3;
+
+    // Find end of authority (before "/" or end of string)
+    size_t auth_end = url.find('/', auth_start);
+    if (auth_end == std::string::npos) {
+        auth_end = url.size();
+    }
+
+    std::string authority = url.substr(auth_start, auth_end - auth_start);
+
+    // Strip userinfo (user:password@)
+    size_t at_pos = authority.rfind('@');
+    if (at_pos != std::string::npos) {
+        authority = authority.substr(at_pos + 1);
+    }
+
+    // Check for IPv6 literal [host]:port
+    if (!authority.empty() && authority[0] == '[') {
+        size_t bracket_end = authority.find(']');
+        if (bracket_end != std::string::npos) {
+            host = authority.substr(1, bracket_end - 1);
+            if (bracket_end + 1 < authority.size() && authority[bracket_end + 1] == ':') {
+                port = std::stoi(authority.substr(bracket_end + 2));
+            }
+            return;
+        }
+    }
+
+    // host:port or just host
+    size_t colon_pos = authority.rfind(':');
+    if (colon_pos != std::string::npos) {
+        host = authority.substr(0, colon_pos);
+        try {
+            port = std::stoi(authority.substr(colon_pos + 1));
+        } catch (...) {
+            // Invalid port — use default
+        }
+    } else {
+        host = authority;
+    }
+
+    if (host.empty()) {
+        host = "localhost";
+    }
+}

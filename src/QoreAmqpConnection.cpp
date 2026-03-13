@@ -43,6 +43,10 @@
 #include <sstream>
 #include <iomanip>
 
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+
 // --- Handler implementation ---
 
 void QoreAmqpConnection::Handler::on_container_start(proton::container& c) {
@@ -420,6 +424,16 @@ void QoreAmqpConnection::connect(ExceptionSink* xsink) {
         return;
     }
 
+    // Check cooperative cancellation before network I/O
+    if (qore_check_cancel(xsink, "AmqpConnection::connect")) {
+        return;
+    }
+
+    // Check network security access
+    if (!checkNetworkAccess(xsink)) {
+        return;
+    }
+
     // Create and start the container in a background thread
     try {
         container_ = std::make_unique<proton::container>(handler_);
@@ -445,14 +459,43 @@ void QoreAmqpConnection::connect(ExceptionSink* xsink) {
         }
     });
 
-    // Wait for connection to be established or error
-    connect_cv_.wait(lock, [this]() {
+    // Wait for connection with cooperative cancellation (30s timeout)
+    bool completed = waitWithCancel(lock, connect_cv_, [this]() {
         return connected_.load() || !connect_error_.empty();
-    });
+    }, 30000, "AmqpConnection::connect", xsink);
+
+    if (*xsink) {
+        // Cancelled — clean up
+        lock.unlock();
+        if (container_thread_.joinable()) {
+            try {
+                container_->stop();
+            } catch (...) {}
+            container_thread_.join();
+        }
+        container_.reset();
+        return;
+    }
+
+    if (!completed) {
+        lock.unlock();
+        xsink->raiseException("AMQP-CONNECTION-ERROR",
+            "connection timed out after 30 seconds");
+        if (container_thread_.joinable()) {
+            try {
+                container_->stop();
+            } catch (...) {}
+            container_thread_.join();
+        }
+        container_.reset();
+        return;
+    }
 
     if (!connect_error_.empty()) {
+        std::string err = connect_error_;
+        lock.unlock();
         xsink->raiseException("AMQP-CONNECTION-ERROR", "failed to connect: %s",
-            connect_error_.c_str());
+            err.c_str());
         // Clean up the thread
         if (container_thread_.joinable()) {
             try {
@@ -506,9 +549,60 @@ bool QoreAmqpConnection::checkConnected(ExceptionSink* xsink) const {
     return true;
 }
 
+bool QoreAmqpConnection::checkNetworkAccess(ExceptionSink* xsink) const {
+    QoreSandboxManagerHelper smh;
+    if (!smh) {
+        return true;
+    }
+
+    std::string host;
+    int port;
+    QoreAmqpHelper::parseUrlHostPort(url_, host, port);
+
+    // Phase 1: preliminary hostname pattern check (pre-DNS)
+    const QoreNetworkSecurityManager& net = smh->network();
+    if (!net.checkHostname(host.c_str(), port, QSEC_NET_TCP)) {
+        xsink->raiseException("NETWORK-ACCESS-DENIED",
+            "access to '%s:%d' is denied by network security policy",
+            host.c_str(), port);
+        return false;
+    }
+
+    // Phase 2: resolve DNS and check all resolved IPs against CIDR deny lists
+    // This prevents SSRF where a hostname resolves to a private/internal IP
+    struct addrinfo hints{};
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    std::string port_str = std::to_string(port);
+    struct addrinfo* result = nullptr;
+    int rc = getaddrinfo(host.c_str(), port_str.c_str(), &hints, &result);
+    if (rc != 0) {
+        xsink->raiseException("AMQP-CONNECTION-ERROR",
+            "failed to resolve hostname '%s': %s", host.c_str(), gai_strerror(rc));
+        return false;
+    }
+
+    // Check every resolved address; deny if any fails the security check
+    for (struct addrinfo* rp = result; rp != nullptr; rp = rp->ai_next) {
+        if (!smh->checkNetworkAccess(rp->ai_addr, rp->ai_addrlen,
+                QSEC_NET_TCP, xsink)) {
+            freeaddrinfo(result);
+            return false;
+        }
+    }
+
+    freeaddrinfo(result);
+    return true;
+}
+
 QoreStringNode* QoreAmqpConnection::createSender(const char* address, const QoreHashNode* opts,
         ExceptionSink* xsink) {
     if (!checkConnected(xsink)) {
+        return nullptr;
+    }
+    if (qore_check_cancel(xsink, "AmqpConnection::createSender")) {
         return nullptr;
     }
 
@@ -545,7 +639,14 @@ QoreStringNode* QoreAmqpConnection::createSender(const char* address, const Qore
     }
 
     std::unique_lock<std::mutex> lock(mtx);
-    cv.wait(lock, [&done]() { return done; });
+    if (!waitWithCancel(lock, cv, [&done]() { return done; },
+            30000, "AmqpConnection::createSender", xsink)) {
+        if (!*xsink) {
+            xsink->raiseException("AMQP-SENDER-ERROR",
+                "timed out creating sender for '%s'", address);
+        }
+        return nullptr;
+    }
 
     if (!error.empty()) {
         xsink->raiseException("AMQP-SENDER-ERROR", "failed to create sender for '%s': %s",
@@ -559,6 +660,9 @@ QoreStringNode* QoreAmqpConnection::createSender(const char* address, const Qore
 QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const QoreHashNode* opts,
         const QoreHashNode* filter, ExceptionSink* xsink) {
     if (!checkConnected(xsink)) {
+        return nullptr;
+    }
+    if (qore_check_cancel(xsink, "AmqpConnection::createReceiver")) {
         return nullptr;
     }
 
@@ -652,7 +756,14 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
     }
 
     std::unique_lock<std::mutex> lock(mtx);
-    cv.wait(lock, [&done]() { return done; });
+    if (!waitWithCancel(lock, cv, [&done]() { return done; },
+            30000, "AmqpConnection::createReceiver", xsink)) {
+        if (!*xsink) {
+            xsink->raiseException("AMQP-RECEIVER-ERROR",
+                "timed out creating receiver for '%s'", address);
+        }
+        return nullptr;
+    }
 
     if (!error.empty()) {
         xsink->raiseException("AMQP-RECEIVER-ERROR", "failed to create receiver for '%s': %s",
@@ -666,6 +777,9 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
 QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMessage& msg,
         const QoreHashNode* opts, ExceptionSink* xsink) {
     if (!checkConnected(xsink)) {
+        return nullptr;
+    }
+    if (qore_check_cancel(xsink, "AmqpConnection::send")) {
         return nullptr;
     }
 
@@ -759,14 +873,13 @@ QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMe
         return nullptr;
     }
 
-    // Wait for broker confirmation (tracker accept/reject)
+    // Wait for broker confirmation (tracker accept/reject) with cooperative cancellation
     bool accepted = false;
     std::string tracker_error;
     proton::binary delivery_tag;
     {
         std::unique_lock<std::mutex> lock(send_mutex_);
-        // Wait up to 30 seconds for broker confirmation
-        bool confirmed = send_cv_.wait_for(lock, std::chrono::seconds(30), [&, this]() {
+        bool confirmed = waitWithCancel(lock, send_cv_, [&, this]() {
             auto it = send_results_.find(tag_key);
             if (it != send_results_.end() && it->second.done) {
                 accepted = it->second.accepted;
@@ -775,10 +888,14 @@ QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMe
                 return true;
             }
             return !connected_.load();
-        });
+        }, 30000, "AmqpConnection::send", xsink);
 
         // Clean up the tracking entry
         send_results_.erase(tag_key);
+
+        if (*xsink) {
+            return nullptr;
+        }
 
         if (!confirmed && connected_) {
             // Timeout waiting for confirmation — treat as accepted (fire-and-forget)
@@ -1043,6 +1160,9 @@ QoreStringNode* QoreAmqpConnection::createDurableReceiver(const char* address,
     if (!checkConnected(xsink)) {
         return nullptr;
     }
+    if (qore_check_cancel(xsink, "AmqpConnection::createDurableReceiver")) {
+        return nullptr;
+    }
 
     std::string name(subscription_name);
     std::string addr(address);
@@ -1112,7 +1232,14 @@ QoreStringNode* QoreAmqpConnection::createDurableReceiver(const char* address,
     }
 
     std::unique_lock<std::mutex> lock(mtx);
-    cv.wait(lock, [&done]() { return done; });
+    if (!waitWithCancel(lock, cv, [&done]() { return done; },
+            30000, "AmqpConnection::createDurableReceiver", xsink)) {
+        if (!*xsink) {
+            xsink->raiseException("AMQP-RECEIVER-ERROR",
+                "timed out creating durable receiver for '%s'", address);
+        }
+        return nullptr;
+    }
 
     if (!error.empty()) {
         xsink->raiseException("AMQP-RECEIVER-ERROR",
@@ -1151,6 +1278,9 @@ void QoreAmqpConnection::closeDurableReceiver(const char* receiver_name, Excepti
 
 void QoreAmqpConnection::unsubscribeDurable(const char* subscription_name, ExceptionSink* xsink) {
     if (!checkConnected(xsink)) {
+        return;
+    }
+    if (qore_check_cancel(xsink, "AmqpConnection::unsubscribeDurable")) {
         return;
     }
 
@@ -1204,7 +1334,14 @@ void QoreAmqpConnection::unsubscribeDurable(const char* subscription_name, Excep
     }
 
     std::unique_lock<std::mutex> lock(mtx);
-    cv.wait(lock, [&done]() { return done; });
+    if (!waitWithCancel(lock, cv, [&done]() { return done; },
+            30000, "AmqpConnection::unsubscribeDurable", xsink)) {
+        if (!*xsink) {
+            xsink->raiseException("AMQP-SUBSCRIPTION-ERROR",
+                "timed out unsubscribing durable '%s'", subscription_name);
+        }
+        return;
+    }
 
     if (!error.empty()) {
         xsink->raiseException("AMQP-SUBSCRIPTION-ERROR",
@@ -1334,7 +1471,14 @@ QoreHashNode* QoreAmqpConnection::managementRequest(const std::string& operation
             }
 
             std::unique_lock<std::mutex> lock2(mtx);
-            cv.wait(lock2, [&done]() { return done; });
+            if (!waitWithCancel(lock2, cv, [&done]() { return done; },
+                    10000, "AmqpConnection::managementRequest", xsink)) {
+                if (!*xsink) {
+                    xsink->raiseException("AMQP-MANAGEMENT-ERROR",
+                        "timed out initializing management");
+                }
+                return nullptr;
+            }
 
             if (!error.empty()) {
                 xsink->raiseException("AMQP-MANAGEMENT-ERROR",
@@ -1373,11 +1517,16 @@ QoreHashNode* QoreAmqpConnection::managementRequest(const std::string& operation
         return nullptr;
     }
 
-    // Wait for response with timeout
+    // Wait for response with timeout and cooperative cancellation
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     std::string reply_addr = mgmt_receiver_.source().address();
 
     while (!done) {
+        // Check cooperative cancellation
+        if (qore_check_cancel(xsink, "AmqpConnection::managementRequest")) {
+            return nullptr;
+        }
+
         if (std::chrono::steady_clock::now() >= deadline) {
             // Timeout — management not supported
             return nullptr;
@@ -1397,7 +1546,8 @@ QoreHashNode* QoreAmqpConnection::managementRequest(const std::string& operation
 
         std::unique_lock<std::mutex> lock2(recv_mutex_);
         auto wait_until = std::min(deadline,
-            std::chrono::steady_clock::now() + std::chrono::milliseconds(100));
+            std::chrono::steady_clock::now()
+                + std::chrono::milliseconds(QORE_IO_POLL_INTERVAL_MS));
         recv_cv_.wait_until(lock2, wait_until);
     }
 
