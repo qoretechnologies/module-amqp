@@ -25,9 +25,9 @@ echo "export QORE_GID=1000" >> ${ENV_FILE}
 
 export MAKE_JOBS=4
 
-# Install SASL runtime if available (proton needs Cyrus SASL for PLAIN auth).
-# Note: proton must also be compiled with cyrus-sasl-dev for this to work.
-# If SASL is not available, tests fall back to anonymous authentication.
+# Install SASL runtime for proton PLAIN authentication.
+# cyrus-sasl-dev is in the deps image (so proton is built with SASL support);
+# we need the runtime library here.
 apk add --no-cache cyrus-sasl 2>/dev/null || true
 
 # build module and install
@@ -46,9 +46,7 @@ ${ARTEMIS_HOME}/bin/artemis create /tmp/amqp-broker \
 # is not supported by BusyBox ps on Alpine)
 /tmp/amqp-broker/bin/artemis run > /tmp/amqp-broker/log/artemis.log 2>&1 &
 BROKER_PID=$!
-# Use anonymous URL: proton on Alpine is built without Cyrus SASL,
-# so PLAIN auth is not available. Broker has --allow-anonymous.
-export AMQP_TEST_URL="amqp://localhost:5672"
+export AMQP_TEST_URL="amqp://guest:guest@localhost:5672"
 
 # wait for broker to be ready
 for i in $(seq 1 30); do
