@@ -359,95 +359,115 @@ proton::message_id QoreAmqpHelper::qoreToMessageId(const QoreValue& val, Excepti
 QoreHashNode* QoreAmqpHelper::protonMapToHash(const proton::value& val, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
 
-    proton::codec::decoder d(val);
-    proton::codec::start s;
-    d >> s;
+    try {
+        proton::codec::decoder d(val);
+        proton::codec::start s;
+        d >> s;
 
-    for (uint32_t i = 0; i < s.size / 2; ++i) {
-        proton::value key;
-        proton::value value;
-        d >> key >> value;
+        for (uint32_t i = 0; i < s.size / 2; ++i) {
+            proton::value key;
+            proton::value value;
+            d >> key >> value;
 
-        std::string key_str;
-        if (key.type() == proton::STRING) {
-            key_str = proton::get<std::string>(key);
-        } else if (key.type() == proton::SYMBOL) {
-            key_str = proton::get<proton::symbol>(key);
-        } else {
-            key_str = proton::to_string(key);
-        }
+            std::string key_str;
+            if (key.type() == proton::STRING) {
+                key_str = proton::get<std::string>(key);
+            } else if (key.type() == proton::SYMBOL) {
+                key_str = proton::get<proton::symbol>(key);
+            } else {
+                key_str = proton::to_string(key);
+            }
 
-        QoreValue qv = protonToQore(value, xsink);
-        if (*xsink) {
-            return nullptr;
+            QoreValue qv = protonToQore(value, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            hash->setKeyValue(key_str.c_str(), qv, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
         }
-        hash->setKeyValue(key_str.c_str(), qv, xsink);
-        if (*xsink) {
-            return nullptr;
-        }
+    } catch (const std::exception& e) {
+        xsink->raiseException("AMQP-DECODE-ERROR", "failed to decode AMQP map: %s", e.what());
+        return nullptr;
     }
 
     return hash.release();
 }
 
 proton::value QoreAmqpHelper::hashToProtonMap(const QoreHashNode* hash, ExceptionSink* xsink) {
-    proton::value result;
-    proton::codec::encoder enc(result);
-    enc << proton::codec::start::map();
+    try {
+        proton::value result;
+        proton::codec::encoder enc(result);
+        enc << proton::codec::start::map();
 
-    ConstHashIterator hi(hash);
-    while (hi.next()) {
-        enc << std::string(hi.getKey());
-        proton::value pv = qoreToProton(hi.get(), xsink);
-        if (*xsink) {
-            return proton::value();
+        ConstHashIterator hi(hash);
+        while (hi.next()) {
+            enc << std::string(hi.getKey());
+            proton::value pv = qoreToProton(hi.get(), xsink);
+            if (*xsink) {
+                return proton::value();
+            }
+            enc << pv;
         }
-        enc << pv;
-    }
 
-    enc << proton::codec::finish();
-    return result;
+        enc << proton::codec::finish();
+        return result;
+    } catch (const std::exception& e) {
+        xsink->raiseException("AMQP-ENCODE-ERROR", "failed to encode AMQP map: %s", e.what());
+        return proton::value();
+    }
 }
 
 QoreListNode* QoreAmqpHelper::protonListToQore(const proton::value& val, ExceptionSink* xsink) {
     ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
 
-    proton::codec::decoder d(val);
-    proton::codec::start s;
-    d >> s;
+    try {
+        proton::codec::decoder d(val);
+        proton::codec::start s;
+        d >> s;
 
-    for (uint32_t i = 0; i < s.size; ++i) {
-        proton::value elem;
-        d >> elem;
+        for (uint32_t i = 0; i < s.size; ++i) {
+            proton::value elem;
+            d >> elem;
 
-        QoreValue qv = protonToQore(elem, xsink);
-        if (*xsink) {
-            return nullptr;
+            QoreValue qv = protonToQore(elem, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            list->push(qv, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
         }
-        list->push(qv, xsink);
-        if (*xsink) {
-            return nullptr;
-        }
+    } catch (const std::exception& e) {
+        xsink->raiseException("AMQP-DECODE-ERROR", "failed to decode AMQP list: %s", e.what());
+        return nullptr;
     }
 
     return list.release();
 }
 
 proton::value QoreAmqpHelper::listToProton(const QoreListNode* list, ExceptionSink* xsink) {
-    proton::value result;
-    proton::codec::encoder enc(result);
-    enc << proton::codec::start::list();
+    try {
+        proton::value result;
+        proton::codec::encoder enc(result);
+        enc << proton::codec::start::list();
 
-    for (size_t i = 0; i < list->size(); ++i) {
-        proton::value pv = qoreToProton(list->retrieveEntry(i), xsink);
-        if (*xsink) {
-            return proton::value();
+        for (size_t i = 0; i < list->size(); ++i) {
+            proton::value pv = qoreToProton(list->retrieveEntry(i), xsink);
+            if (*xsink) {
+                return proton::value();
+            }
+            enc << pv;
         }
-        enc << pv;
-    }
 
-    enc << proton::codec::finish();
-    return result;
+        enc << proton::codec::finish();
+        return result;
+    } catch (const std::exception& e) {
+        xsink->raiseException("AMQP-ENCODE-ERROR", "failed to encode AMQP list: %s", e.what());
+        return proton::value();
+    }
 }
 
 DateTimeNode* QoreAmqpHelper::timestampToDate(proton::timestamp ts) {

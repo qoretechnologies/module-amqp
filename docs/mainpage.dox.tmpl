@@ -20,28 +20,29 @@
 
     @section amqparch Architecture
 
-    The module uses a two-layer architecture:
+    The module uses a three-layer architecture:
     - \c amqp (binary module): C++ wrapper around \c qpid-proton-cpp providing @ref Qore::Amqp::AmqpConnection
       and @ref Qore::Amqp::AmqpMessage
-    - \c AmqpUtil (pure %Qore): High-level API with @ref AmqpUtil::AmqpClient "AmqpClient",
-      @ref AmqpUtil::AmqpProducer "AmqpProducer", @ref AmqpUtil::AmqpConsumer "AmqpConsumer", and
-      @ref AmqpUtil::AmqpRequestReply "AmqpRequestReply"
+    - \c AmqpUtil (pure %Qore): High-level API with @ref Amqp::AmqpClient "AmqpClient",
+      @ref Amqp::AmqpProducer "AmqpProducer", @ref Amqp::AmqpConsumer "AmqpConsumer",
+      @ref Amqp::AmqpRequestReply "AmqpRequestReply", and
+      @ref Amqp::AmqpManagementClient "AmqpManagementClient"
     - \c AmqpDataProvider (pure %Qore): Data provider integration with factory, connection scheme, and
       observable message events
 
     @section amqphashdecls Hashdecls
 
     The following hashdecls are defined in the \c amqp binary module:
-    - @ref Qore::Amqp::AmqpConnectionOptions "AmqpConnectionOptions"
-    - @ref Qore::Amqp::AmqpSslOptions "AmqpSslOptions"
-    - @ref Qore::Amqp::AmqpSaslOptions "AmqpSaslOptions"
-    - @ref Qore::Amqp::AmqpMessageProperties "AmqpMessageProperties"
-    - @ref Qore::Amqp::AmqpDeliveryInfo "AmqpDeliveryInfo"
-    - @ref Qore::Amqp::AmqpSendOptions "AmqpSendOptions"
-    - @ref Qore::Amqp::AmqpReceiveOptions "AmqpReceiveOptions"
-    - @ref Qore::Amqp::AmqpFilterOptions "AmqpFilterOptions"
-    - @ref Qore::Amqp::AmqpAddressInfo "AmqpAddressInfo"
-    - @ref Qore::Amqp::AmqpQueueInfo "AmqpQueueInfo"
+    - @ref Qore::Amqp::AmqpConnectionOptions "AmqpConnectionOptions" — connection configuration
+    - @ref Qore::Amqp::AmqpSslOptions "AmqpSslOptions" — TLS/SSL configuration
+    - @ref Qore::Amqp::AmqpSaslOptions "AmqpSaslOptions" — SASL authentication configuration
+    - @ref Qore::Amqp::AmqpMessageProperties "AmqpMessageProperties" — message header and application properties
+    - @ref Qore::Amqp::AmqpDeliveryInfo "AmqpDeliveryInfo" — delivery status from send operations
+    - @ref Qore::Amqp::AmqpSendOptions "AmqpSendOptions" — per-message send options
+    - @ref Qore::Amqp::AmqpReceiveOptions "AmqpReceiveOptions" — receiver link options
+    - @ref Qore::Amqp::AmqpFilterOptions "AmqpFilterOptions" — message selector/filter configuration
+    - @ref Qore::Amqp::AmqpAddressInfo "AmqpAddressInfo" — address info from management queries
+    - @ref Qore::Amqp::AmqpQueueInfo "AmqpQueueInfo" — queue info from management queries
 
     @section amqptypemap Type Mapping
 
@@ -61,34 +62,493 @@
 
     @section amqpexamples Usage Examples
 
-    @par Simple Send and Receive
+    @subsection amqp_ex_basic Basic Send and Receive
     @code{.py}
+%modern
+%requires amqp
+
+# Connect to the broker
+AmqpConnection conn(<AmqpConnectionOptions>{"url": "amqp://guest:guest@@localhost:5672"});
+conn.connect();
+
+# Create sender and receiver links
+string sender = conn.createSender("test-queue");
+string receiver = conn.createReceiver("test-queue");
+
+# Send a message
+conn.send(sender, new AmqpMessage("Hello, AMQP!"));
+
+# Receive and acknowledge
+*AmqpMessage msg = conn.receive(receiver, 5s);
+if (msg) {
+    printf("Received: %y\\n", msg.getBody());
+    conn.accept(msg.getDeliveryTag());
+}
+
+conn.close();
+    @endcode
+
+    @subsection amqp_ex_highlevel High-Level Client (AmqpUtil)
+    @code{.py}
+%modern
+%requires AmqpUtil
+
+Amqp::AmqpClient client("amqp://guest:guest@@localhost:5672");
+client.connect();
+
+# Simple one-liner send
+client.send("my-queue", "Hello from AmqpClient!");
+
+# Receive
+*AmqpMessage msg = client.receive("my-queue", 5s);
+if (msg) {
+    printf("Got: %y\\n", msg.getBody());
+}
+
+client.close();
+    @endcode
+
+    @subsection amqp_ex_producer_consumer Producer and Consumer Pattern
+    @code{.py}
+%modern
+%requires AmqpUtil
+
+Amqp::AmqpClient client("amqp://guest:guest@@localhost:5672");
+client.connect();
+
+# Create a dedicated producer
+Amqp::AmqpProducer producer = client.createProducer("orders");
+producer.send({"order_id": 123, "item": "widget"},
+    <AmqpMessageProperties>{"content_type": "application/json"});
+
+# Create a dedicated consumer
+Amqp::AmqpConsumer consumer = client.createConsumer("orders");
+while (*AmqpMessage msg = consumer.receive(5s)) {
+    printf("Order: %y\\n", msg.getBody());
+    consumer.accept(msg.getDeliveryTag());
+}
+
+client.close();
+    @endcode
+
+    @subsection amqp_ex_properties Message Properties
+    @code{.py}
+%modern
 %requires amqp
 
 AmqpConnection conn(<AmqpConnectionOptions>{"url": "amqp://guest:guest@@localhost:5672"});
 conn.connect();
 
-string sender = conn.createSender("test-queue");
-conn.send(sender, new AmqpMessage("Hello, AMQP!"));
+# Send with full properties
+string sender = conn.createSender("my-queue");
+AmqpMessage msg({"data": "payload"}, <AmqpMessageProperties>{
+    "message_id": "msg-001",
+    "correlation_id": "req-42",
+    "content_type": "application/json",
+    "subject": "order.created",
+    "reply_to": "reply-queue",
+    "application_properties": {
+        "priority": "high",
+        "region": "us-east",
+    },
+});
+conn.send(sender, msg);
 
-string receiver = conn.createReceiver("test-queue");
-*AmqpMessage msg = conn.receive(receiver, 5s);
-if (msg) {
-    printf("Received: %y\\n", msg.getBody());
+# Receive and inspect properties
+string receiver = conn.createReceiver("my-queue");
+*AmqpMessage received = conn.receive(receiver, 5s);
+if (received) {
+    hash<AmqpMessageProperties> props = received.getProperties();
+    printf("ID: %y, Subject: %y\\n", props.message_id, props.subject);
+    printf("App properties: %y\\n", props.application_properties);
+    printf("Body: %y\\n", received.getBody());
+    conn.accept(received.getDeliveryTag());
 }
+
 conn.close();
     @endcode
+
+    @subsection amqp_ex_delivery Delivery Disposition
+    @code{.py}
+%modern
+%requires AmqpUtil
+
+Amqp::AmqpClient client("amqp://guest:guest@@localhost:5672");
+client.connect();
+
+Amqp::AmqpConsumer consumer = client.createConsumer("work-queue");
+
+while (*AmqpMessage msg = consumer.receive(5s)) {
+    try {
+        processMessage(msg.getBody());
+        # Success — remove from queue
+        consumer.accept(msg.getDeliveryTag());
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err == "TRANSIENT-ERROR") {
+            # Transient failure — release for redelivery
+            consumer.release(msg.getDeliveryTag());
+        } else {
+            # Permanent failure — reject (moves to dead-letter queue)
+            consumer.reject(msg.getDeliveryTag());
+        }
+    }
+}
+
+client.close();
+    @endcode
+
+    @subsection amqp_ex_transactions Transactions
+    @code{.py}
+%modern
+%requires AmqpUtil
+
+Amqp::AmqpClient client("amqp://guest:guest@@localhost:5672");
+client.connect();
+
+# Atomic multi-queue send
+client.beginTransaction();
+client.send("queue-a", "message for A");
+client.send("queue-b", "message for B");
+client.commitTransaction();  # Both delivered atomically
+
+# Rollback example
+client.beginTransaction();
+client.send("queue-a", "this will be rolled back");
+client.rollbackTransaction();  # Message not delivered
+
+# Transactional receive + process + send
+client.beginTransaction();
+Amqp::AmqpConsumer consumer = client.createConsumer("input-queue");
+*AmqpMessage msg = consumer.receive(5s);
+if (msg) {
+    # Process and forward
+    client.send("output-queue", "processed: " + msg.getBody());
+    consumer.accept(msg.getDeliveryTag());
+    client.commitTransaction();  # Receive ack + send are atomic
+} else {
+    client.rollbackTransaction();
+}
+
+client.close();
+    @endcode
+
+    @subsection amqp_ex_requestreply Request-Reply
+    @code{.py}
+%modern
+%requires AmqpUtil
+
+Amqp::AmqpClient client("amqp://guest:guest@@localhost:5672");
+client.connect();
+
+# Client side: send request, wait for reply
+Amqp::AmqpRequestReply rr(client, "rpc-queue");
+AmqpMessage response = rr.request("What is 2+2?", 30s);
+printf("Server replied: %y\\n", response.getBody());
+rr.close();
+
+client.close();
+    @endcode
+
+    @par Server side (handling requests):
+    @code{.py}
+%modern
+%requires AmqpUtil
+
+Amqp::AmqpClient client("amqp://guest:guest@@localhost:5672");
+client.connect();
+
+Amqp::AmqpConsumer consumer = client.createConsumer("rpc-queue");
+while (*AmqpMessage request = consumer.receive(30s)) {
+    # Process the request
+    auto result = processRequest(request.getBody());
+
+    # Send reply using the reply-to address and correlation ID
+    *string reply_to = request.getReplyTo();
+    if (reply_to) {
+        client.send(reply_to, result, <AmqpMessageProperties>{
+            "correlation_id": request.getMessageId(),
+        });
+    }
+    consumer.accept(request.getDeliveryTag());
+}
+
+client.close();
+    @endcode
+
+    @subsection amqp_ex_durable Durable Subscriptions
+    @code{.py}
+%modern
+%requires AmqpUtil
+
+Amqp::AmqpClient client("amqp://guest:guest@@localhost:5672");
+client.connect();
+
+# Create a durable subscription — persists across disconnects
+Amqp::AmqpConsumer consumer = client.createDurableConsumer("topic/news", "my-news-sub");
+
+# Receive messages
+while (*AmqpMessage msg = consumer.receive(5s)) {
+    printf("News: %y\\n", msg.getBody());
+    consumer.accept(msg.getDeliveryTag());
+}
+
+# Close without unsubscribing — subscription persists on broker
+# Messages will accumulate while disconnected
+consumer.closeDurable();
+client.close();
+
+# Later: reconnect and resume from where we left off
+# The broker has held all messages sent since we disconnected
+Amqp::AmqpClient client2("amqp://guest:guest@@localhost:5672");
+client2.connect();
+Amqp::AmqpConsumer consumer2 = client2.createDurableConsumer("topic/news", "my-news-sub");
+# ... receives accumulated messages ...
+
+# To permanently remove the subscription:
+consumer2.unsubscribe();
+client2.close();
+    @endcode
+
+    @subsection amqp_ex_selectors Message Selectors
+    @code{.py}
+%modern
+%requires AmqpUtil
+
+Amqp::AmqpClient client("amqp://guest:guest@@localhost:5672");
+client.connect();
+
+# Send messages with different application properties
+Amqp::AmqpProducer producer = client.createProducer("events");
+producer.send("Red event", <AmqpMessageProperties>{
+    "application_properties": {"color": "red", "priority": 1}});
+producer.send("Blue event", <AmqpMessageProperties>{
+    "application_properties": {"color": "blue", "priority": 5}});
+producer.send("Red urgent", <AmqpMessageProperties>{
+    "application_properties": {"color": "red", "priority": 9}});
+
+# Only receive red messages with priority > 5
+Amqp::AmqpConsumer consumer = client.createConsumer("events", NOTHING,
+    <AmqpFilterOptions>{"selector": "color = 'red' AND priority > 5"});
+
+*AmqpMessage msg = consumer.receive(5s);
+if (msg) {
+    printf("Filtered: %y\\n", msg.getBody());  # "Red urgent"
+    consumer.accept(msg.getDeliveryTag());
+}
+
+client.close();
+    @endcode
+
+    @subsection amqp_ex_tls TLS/SSL Connections
+    @code{.py}
+%modern
+%requires amqp
+
+# TLS with server verification
+AmqpConnection conn(<AmqpConnectionOptions>{
+    "url": "amqps://broker.example.com:5671",
+    "ssl": <AmqpSslOptions>{
+        "ca_cert": "/etc/ssl/certs/ca.crt",
+        "verify": True,
+    },
+});
+conn.connect();
+
+# Mutual TLS (client certificate authentication)
+AmqpConnection conn2(<AmqpConnectionOptions>{
+    "url": "amqps://broker.example.com:5671",
+    "ssl": <AmqpSslOptions>{
+        "ca_cert": "/etc/ssl/certs/ca.crt",
+        "client_cert": "/etc/ssl/certs/client.crt",
+        "client_key": "/etc/ssl/private/client.key",
+        "verify": True,
+    },
+});
+conn2.connect();
+    @endcode
+
+    @subsection amqp_ex_sasl SASL Authentication
+    @code{.py}
+%modern
+%requires amqp
+
+# URL-based credentials (simplest)
+AmqpConnection conn(<AmqpConnectionOptions>{
+    "url": "amqp://myuser:mypassword@@broker.example.com:5672",
+});
+conn.connect();
+
+# Explicit SASL PLAIN
+AmqpConnection conn2(<AmqpConnectionOptions>{
+    "url": "amqp://broker.example.com:5672",
+    "sasl": <AmqpSaslOptions>{
+        "mechanism": "PLAIN",
+        "username": "myuser",
+        "password": "mypassword",
+    },
+});
+conn2.connect();
+
+# Anonymous access
+AmqpConnection conn3(<AmqpConnectionOptions>{
+    "url": "amqp://broker.example.com:5672",
+    "sasl": <AmqpSaslOptions>{
+        "mechanism": "ANONYMOUS",
+    },
+});
+conn3.connect();
+    @endcode
+
+    @subsection amqp_ex_management Broker Introspection (Management Protocol)
+    @code{.py}
+%modern
+%requires AmqpUtil
+
+Amqp::AmqpClient client("amqp://guest:guest@@localhost:5672");
+client.connect();
+
+Amqp::AmqpManagementClient mgmt = client.getManagementClient();
+
+# List all addresses
+list<hash<AmqpAddressInfo>> addresses = mgmt.queryAddresses();
+for (hash<AmqpAddressInfo> addr in addresses) {
+    printf("Address: %s (type: %s, queues: %d, messages: %d)\\n",
+        addr.name, addr.routing_type, addr.queue_count, addr.message_count);
+}
+
+# List queues for a specific address
+list<hash<AmqpQueueInfo>> queues = mgmt.queryQueues("my-address");
+for (hash<AmqpQueueInfo> q in queues) {
+    printf("  Queue: %s (messages: %d, consumers: %d)\\n",
+        q.name, q.message_count, q.consumer_count);
+}
+
+client.close();
+    @endcode
+
+    @subsection amqp_ex_dataprovider Data Provider Integration
+    @code{.py}
+%modern
+%requires AmqpDataProvider
+
+# Create provider with explicit addresses
+AbstractDataProviderFactory factory = DataProvider::getFactory("amqp");
+AbstractDataProvider provider = factory.create({
+    "url": "amqp://guest:guest@@localhost:5672",
+    "addresses": "orders,notifications",
+});
+
+# Send a message via the data provider
+auto result = provider.getChildProvider("orders").doRequest({
+    "body": {"order_id": 123, "total": 99.95},
+    "content_type": "application/json",
+    "application_properties": {"priority": "high"},
+});
+
+# Auto-discover addresses from broker via management protocol
+AbstractDataProvider mgmt_provider = factory.create({
+    "url": "amqp://guest:guest@@localhost:5672",
+    "use_management": True,
+});
+# Provider hierarchy is automatically populated from broker addresses
+
+# Subscribe to events using observable pattern
+AbstractDataProvider events = provider.getChildProvider("orders").getChildProvider("events");
+events.registerObserver(EVENT_AMQP_MESSAGE, sub (string event_id, hash<auto> data) {
+    printf("Received order: %y\\n", data.body);
+});
+    @endcode
+
+    @subsection amqp_ex_errors Error Handling
+    @code{.py}
+%modern
+%requires AmqpUtil
+
+Amqp::AmqpClient client("amqp://guest:guest@@localhost:5672");
+
+# Connection errors
+try {
+    client.connect();
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err == "AMQP-CONNECTION-ERROR") {
+        printf("Cannot connect to broker: %s\\n", ex.desc);
+    }
+}
+
+# Send errors
+try {
+    client.send("my-queue", "test message");
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err == "AMQP-SEND-ERROR") {
+        printf("Send failed: %s\\n", ex.desc);
+    }
+}
+
+# Receive with timeout (no exception — returns NOTHING)
+*AmqpMessage msg = client.receive("my-queue", 5s);
+if (!msg) {
+    printf("No message available within timeout\\n");
+}
+
+# Transaction errors
+try {
+    client.commitTransaction();  # No active transaction
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err == "AMQP-TRANSACTION-ERROR") {
+        printf("Transaction error: %s\\n", ex.desc);
+    }
+}
+
+client.close();
+    @endcode
+
+    @section amqp_connection_options Connection Options Reference
+
+    | Option | Type | Default | Description |
+    |--------|------|---------|-------------|
+    | \c url | string | (required) | Broker URL (\c amqp:// or \c amqps://) |
+    | \c ssl | @ref AmqpSslOptions | — | TLS/SSL configuration |
+    | \c sasl | @ref AmqpSaslOptions | — | SASL authentication |
+    | \c heartbeat | int | 0 | Heartbeat interval in seconds |
+    | \c idle_timeout | int | 0 | Idle timeout in milliseconds |
+    | \c max_frame_size | int | 0 | Maximum frame size in bytes |
+    | \c container_id | string | auto | Container identifier |
+    | \c virtual_host | string | — | Virtual host name |
+    | \c reconnect | bool | False | Enable automatic reconnection |
+    | \c max_reconnect_attempts | int | 0 | Max reconnect attempts (0 = unlimited) |
+    | \c reconnect_delay_ms | int | 1000 | Delay between reconnect attempts |
+
+    @section amqp_exceptions Exception Reference
+
+    | Exception | Raised By | Description |
+    |-----------|-----------|-------------|
+    | \c AMQP-CONNECTION-ERROR | connect(), send(), receive(), etc. | Connection not open or connection failure |
+    | \c AMQP-SEND-ERROR | send() | Message send failure or broker rejection |
+    | \c AMQP-RECEIVE-ERROR | receive() | Receiver not found or decode failure |
+    | \c AMQP-DELIVERY-ERROR | accept(), reject(), release(), modify() | Delivery tag not found |
+    | \c AMQP-TRANSACTION-ERROR | begin/commit/rollbackTransaction() | Invalid transaction state |
+    | \c AMQP-SENDER-ERROR | createSender() | Sender link creation failure |
+    | \c AMQP-RECEIVER-ERROR | createReceiver(), createDurableReceiver() | Receiver link creation failure |
+    | \c AMQP-SUBSCRIPTION-ERROR | unsubscribeDurable() | Subscription removal failure |
+    | \c AMQP-DECODE-ERROR | receive() | Message body/map/list decode failure |
+    | \c AMQP-ENCODE-ERROR | send() | Message body/map/list encode failure |
+    | \c AMQP-REQUEST-REPLY-TIMEOUT | AmqpRequestReply::request() | No correlated response within timeout |
 
     @section amqprelnotes Release Notes
 
     @subsection amqp_v1_0 amqp Module Version 1.0
     - initial release
-    - AmqpConnection class for AMQP 1.0 messaging
-    - AmqpMessage class with full type mapping
+    - @ref Qore::Amqp::AmqpConnection "AmqpConnection" class for AMQP 1.0 messaging
+    - @ref Qore::Amqp::AmqpMessage "AmqpMessage" class with full type mapping and delivery tag support
     - TLS/SSL and SASL authentication
-    - Durable subscriptions and message selectors
-    - Transaction support
-    - AMQP Management Protocol support
-    - AmqpUtil module with high-level API
-    - AmqpDataProvider module for data provider integration
+    - Delivery disposition: accept, reject, release, modify
+    - Durable subscriptions with close/unsubscribe lifecycle
+    - JMS-style message selectors via @ref Qore::Amqp::AmqpFilterOptions "AmqpFilterOptions"
+    - Transaction support (begin, commit, rollback)
+    - AMQP Management Protocol support for broker introspection
+    - @ref Amqp::AmqpClient "AmqpClient" high-level API with cached sender/receiver links
+    - @ref Amqp::AmqpProducer "AmqpProducer" and @ref Amqp::AmqpConsumer "AmqpConsumer" for dedicated messaging
+    - @ref Amqp::AmqpRequestReply "AmqpRequestReply" for request-reply pattern with auto-correlation
+    - @ref Amqp::AmqpManagementClient "AmqpManagementClient" for broker introspection
+    - @ref AmqpDataProvider "AmqpDataProvider" module with factory, connection schemes, and observable events
 */

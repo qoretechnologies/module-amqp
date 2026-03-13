@@ -40,8 +40,9 @@ public:
     //! Constructor: create from Qore body and optional properties
     DLLLOCAL QoreAmqpMessage(const QoreValue& body, const QoreHashNode* properties, ExceptionSink* xsink);
 
-    //! Constructor: create from a received proton::message
-    DLLLOCAL QoreAmqpMessage(const proton::message& msg, ExceptionSink* xsink);
+    //! Constructor: create from a received proton::message with delivery tag
+    DLLLOCAL QoreAmqpMessage(const proton::message& msg, const proton::binary& delivery_tag,
+        ExceptionSink* xsink);
 
     DLLLOCAL ~QoreAmqpMessage() override {
         qore_body.discard(nullptr);
@@ -71,6 +72,9 @@ public:
     //! Get subject
     DLLLOCAL QoreValue getSubject(ExceptionSink* xsink) const;
 
+    //! Get the delivery tag (only set for received messages)
+    DLLLOCAL BinaryNode* getDeliveryTag() const;
+
     //! Get a const reference to the underlying proton::message
     DLLLOCAL const proton::message& getProtonMessage() const { return msg; }
 
@@ -82,6 +86,9 @@ private:
 
     //! Store the original Qore body for exact round-trip
     QoreValue qore_body;
+
+    //! Delivery tag for received messages (empty for sent messages)
+    proton::binary delivery_tag_;
 
     //! Apply properties hash to the proton message
     DLLLOCAL void applyProperties(const QoreHashNode* properties, ExceptionSink* xsink);

@@ -217,6 +217,7 @@ void QoreAmqpConnection::Handler::on_tracker_reject(proton::tracker& t) {
         if (it != conn_.send_results_.end()) {
             it->second.done = true;
             it->second.accepted = false;
+            it->second.error = "message rejected by broker";
         }
         conn_.send_cv_.notify_all();
     }
@@ -420,7 +421,13 @@ void QoreAmqpConnection::connect(ExceptionSink* xsink) {
     }
 
     // Create and start the container in a background thread
-    container_ = std::make_unique<proton::container>(handler_);
+    try {
+        container_ = std::make_unique<proton::container>(handler_);
+    } catch (const std::exception& e) {
+        xsink->raiseException("AMQP-CONNECTION-ERROR",
+            "failed to create AMQP container: %s", e.what());
+        return;
+    }
 
     std::unique_lock<std::mutex> lock(connect_mutex_);
     connect_error_.clear();
@@ -621,9 +628,9 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
             } else if (prefetch > 0) {
                 ro.credit_window(prefetch);
             }
-            if (auto_accept) {
-                ro.auto_accept(true);
-            }
+            // Default auto_accept to false so manual disposition works;
+            // proton defaults to true which prevents accept/reject/release
+            ro.auto_accept(auto_accept);
 
             ro.source(so);
 
@@ -674,7 +681,14 @@ QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMe
     }
 
     // Prepare the proton message
-    proton::message pmsg = msg.getProtonMessage();
+    proton::message pmsg;
+    try {
+        pmsg = msg.getProtonMessage();
+    } catch (const std::exception& e) {
+        xsink->raiseException("AMQP-SEND-ERROR",
+            "failed to prepare message: %s", e.what());
+        return nullptr;
+    }
 
     // Apply send options
     if (opts) {
@@ -700,33 +714,44 @@ QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMe
         }
     }
 
-    // Send via work queue
-    std::string tracker_key;
+    // Send via work queue and wait for broker confirmation
+    std::string tag_key;
     std::mutex mtx;
     std::condition_variable cv;
-    bool done = false;
+    bool send_done = false;
     bool sent = false;
     std::string error;
 
     if (!scheduleWork([&, this]() {
         try {
             proton::tracker t = sender.send(pmsg);
-            // Use tracker tag as key
-            tracker_key = std::to_string((uintptr_t)&t);
+            // Extract the delivery tag for tracking
+            proton::binary tag = t.tag();
+            std::ostringstream oss;
+            for (uint8_t b : tag) {
+                oss << std::hex << std::setfill('0') << std::setw(2) << (int)b;
+            }
+            tag_key = oss.str();
+            // Register for tracker result
+            {
+                std::lock_guard<std::mutex> lock(send_mutex_);
+                send_results_[tag_key] = SendResult{false, false, "", tag};
+            }
             sent = true;
         } catch (const std::exception& e) {
             error = e.what();
         }
         std::lock_guard<std::mutex> lock(mtx);
-        done = true;
+        send_done = true;
         cv.notify_all();
     }, xsink)) {
         return nullptr;
     }
 
+    // Wait for the send to be scheduled
     {
         std::unique_lock<std::mutex> lock(mtx);
-        cv.wait(lock, [&done]() { return done; });
+        cv.wait(lock, [&send_done]() { return send_done; });
     }
 
     if (!error.empty()) {
@@ -734,11 +759,52 @@ QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMe
         return nullptr;
     }
 
+    // Wait for broker confirmation (tracker accept/reject)
+    bool accepted = false;
+    std::string tracker_error;
+    proton::binary delivery_tag;
+    {
+        std::unique_lock<std::mutex> lock(send_mutex_);
+        // Wait up to 30 seconds for broker confirmation
+        bool confirmed = send_cv_.wait_for(lock, std::chrono::seconds(30), [&, this]() {
+            auto it = send_results_.find(tag_key);
+            if (it != send_results_.end() && it->second.done) {
+                accepted = it->second.accepted;
+                tracker_error = it->second.error;
+                delivery_tag = it->second.tag;
+                return true;
+            }
+            return !connected_.load();
+        });
+
+        // Clean up the tracking entry
+        send_results_.erase(tag_key);
+
+        if (!confirmed && connected_) {
+            // Timeout waiting for confirmation — treat as accepted (fire-and-forget)
+            accepted = true;
+        }
+    }
+
+    if (!connected_ && !accepted) {
+        xsink->raiseException("AMQP-SEND-ERROR", "connection lost while waiting for send confirmation");
+        return nullptr;
+    }
+
+    if (!tracker_error.empty()) {
+        xsink->raiseException("AMQP-SEND-ERROR", "broker error: %s", tracker_error.c_str());
+        return nullptr;
+    }
+
     // Build delivery info response
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclAmqpDeliveryInfo, xsink), xsink);
-    info->setKeyValue("tag", new BinaryNode, xsink);
-    info->setKeyValue("settled", false, xsink);
-    info->setKeyValue("state", new QoreStringNode("accepted"), xsink);
+    BinaryNode* tag_node = new BinaryNode;
+    if (!delivery_tag.empty()) {
+        tag_node->append(delivery_tag.data(), delivery_tag.size());
+    }
+    info->setKeyValue("tag", tag_node, xsink);
+    info->setKeyValue("settled", accepted, xsink);
+    info->setKeyValue("state", new QoreStringNode(accepted ? "accepted" : "rejected"), xsink);
     return info.release();
 }
 
@@ -776,8 +842,16 @@ QoreObject* QoreAmqpConnection::receive(QoreObject* self, const char* receiver_n
                 ReceivedMessage rm = std::move(it->second.front());
                 it->second.pop();
 
-                // Create QoreAmqpMessage from the proton message
-                QoreAmqpMessage* qmsg = new QoreAmqpMessage(rm.msg, xsink);
+                // Create QoreAmqpMessage from the proton message with delivery tag
+                proton::binary dtag = rm.delivery.tag();
+                QoreAmqpMessage* qmsg;
+                try {
+                    qmsg = new QoreAmqpMessage(rm.msg, dtag, xsink);
+                } catch (const std::exception& e) {
+                    xsink->raiseException("AMQP-RECEIVE-ERROR",
+                        "failed to decode received message: %s", e.what());
+                    return nullptr;
+                }
                 if (*xsink) {
                     delete qmsg;
                     return nullptr;
@@ -1015,6 +1089,8 @@ QoreStringNode* QoreAmqpConnection::createDurableReceiver(const char* address,
             }
 
             ro.source(so);
+            // Default auto_accept to false so manual disposition works
+            ro.auto_accept(false);
             // Use subscription name as the link name for durable subscriptions
             ro.name(name);
 

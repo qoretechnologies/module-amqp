@@ -67,6 +67,7 @@ public class AmqpUtilTest inherits QUnit::Test {
 
         # AmqpConsumer
         addTestCase("consumer receive", \testConsumerReceive());
+        addTestCase("consumer accept via delivery tag", \testConsumerAccept());
         addTestCase("consumer multiple messages", \testConsumerMultiple());
         addTestCase("consumer isDurable", \testConsumerIsDurable());
         addTestCase("consumer non-durable closeDurable throws", \testConsumerNonDurableCloseThrows());
@@ -129,8 +130,10 @@ public class AmqpUtilTest inherits QUnit::Test {
         AmqpClient client = getClient();
         on_exit client.close();
 
+        # Create receiver first so the queue exists before sending
+        AmqpConsumer consumer = client.createConsumer(addr);
         client.send(addr, "Hello from AmqpClient!");
-        *AmqpMessage msg = client.receive(addr, 10s);
+        *AmqpMessage msg = consumer.receive(10s);
         @assert(msg);
         assertEq("Hello from AmqpClient!", msg.getBody());
     }
@@ -140,9 +143,11 @@ public class AmqpUtilTest inherits QUnit::Test {
         AmqpClient client = getClient();
         on_exit client.close();
 
+        # Create receiver first so the queue exists before sending
+        AmqpConsumer consumer = client.createConsumer(addr);
         hash<auto> data = {"name": "test", "count": 42};
         client.send(addr, data);
-        *AmqpMessage msg = client.receive(addr, 10s);
+        *AmqpMessage msg = consumer.receive(10s);
         @assert(msg);
         hash<auto> body = msg.getBody();
         assertEq("test", body.name);
@@ -154,12 +159,14 @@ public class AmqpUtilTest inherits QUnit::Test {
         AmqpClient client = getClient();
         on_exit client.close();
 
+        # Create receiver first so the queue exists before sending
+        AmqpConsumer consumer = client.createConsumer(addr);
         client.send(addr, "with props", <AmqpMessageProperties>{
             "content_type": "text/plain",
             "message_id": "util-msg-001",
             "subject": "test-subject",
         });
-        *AmqpMessage msg = client.receive(addr, 10s);
+        *AmqpMessage msg = consumer.receive(10s);
         @assert(msg);
         assertEq("with props", msg.getBody());
         assertEq("text/plain", msg.getContentType());
@@ -172,9 +179,11 @@ public class AmqpUtilTest inherits QUnit::Test {
         AmqpClient client = getClient();
         on_exit client.close();
 
+        # Create receiver first so the queue exists before sending
+        AmqpConsumer consumer = client.createConsumer(addr);
         AmqpMessage outgoing(42);
         client.sendMessage(addr, outgoing);
-        *AmqpMessage msg = client.receive(addr, 10s);
+        *AmqpMessage msg = consumer.receive(10s);
         @assert(msg);
         assertEq(42, msg.getBody());
     }
@@ -193,15 +202,18 @@ public class AmqpUtilTest inherits QUnit::Test {
         AmqpClient client = getClient();
         on_exit client.close();
 
+        # Create receiver first so the queue exists before sending
+        AmqpConsumer consumer = client.createConsumer(addr);
+
         # Send twice to same address — should reuse sender
         client.send(addr, "msg-1");
         client.send(addr, "msg-2");
 
-        *AmqpMessage msg1 = client.receive(addr, 10s);
+        *AmqpMessage msg1 = consumer.receive(10s);
         @assert(msg1);
         assertEq("msg-1", msg1.getBody());
 
-        *AmqpMessage msg2 = client.receive(addr, 10s);
+        *AmqpMessage msg2 = consumer.receive(10s);
         @assert(msg2);
         assertEq("msg-2", msg2.getBody());
     }
@@ -213,10 +225,12 @@ public class AmqpUtilTest inherits QUnit::Test {
         AmqpClient client = getClient();
         on_exit client.close();
 
+        # Create receiver first so the queue exists before sending
+        AmqpConsumer consumer = client.createConsumer(addr);
         AmqpProducer producer = client.createProducer(addr);
         producer.send("producer msg");
 
-        *AmqpMessage msg = client.receive(addr, 10s);
+        *AmqpMessage msg = consumer.receive(10s);
         @assert(msg);
         assertEq("producer msg", msg.getBody());
     }
@@ -226,10 +240,12 @@ public class AmqpUtilTest inherits QUnit::Test {
         AmqpClient client = getClient();
         on_exit client.close();
 
+        # Create receiver first so the queue exists before sending
+        AmqpConsumer consumer = client.createConsumer(addr);
         AmqpProducer producer = client.createProducer(addr);
         producer.sendMessage(new AmqpMessage("via sendMessage"));
 
-        *AmqpMessage msg = client.receive(addr, 10s);
+        *AmqpMessage msg = consumer.receive(10s);
         @assert(msg);
         assertEq("via sendMessage", msg.getBody());
     }
@@ -239,6 +255,8 @@ public class AmqpUtilTest inherits QUnit::Test {
         AmqpClient client = getClient();
         on_exit client.close();
 
+        # Create receiver first so the queue exists before sending
+        AmqpConsumer consumer = client.createConsumer(addr);
         # Create producer with default send options
         AmqpProducer producer = client.createProducer(addr, <AmqpSendOptions>{
             "durable": True,
@@ -246,7 +264,7 @@ public class AmqpUtilTest inherits QUnit::Test {
         @assert(producer.getSenderName());
         producer.send("with default opts");
 
-        *AmqpMessage msg = client.receive(addr, 10s);
+        *AmqpMessage msg = consumer.receive(10s);
         @assert(msg);
         assertEq("with default opts", msg.getBody());
     }
@@ -265,6 +283,30 @@ public class AmqpUtilTest inherits QUnit::Test {
         *AmqpMessage msg = consumer.receive(10s);
         @assert(msg);
         assertEq("consumer msg", msg.getBody());
+    }
+
+    testConsumerAccept() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        AmqpProducer producer = client.createProducer(addr);
+        AmqpConsumer consumer = client.createConsumer(addr);
+
+        producer.send("accept-via-consumer");
+        *AmqpMessage msg = consumer.receive(10s);
+        @assert(msg);
+        assertEq("accept-via-consumer", msg.getBody());
+
+        # Get delivery tag from message and accept via consumer
+        *binary tag = msg.getDeliveryTag();
+        @assert(tag);
+        assertTrue(tag.size() > 0);
+        consumer.accept(tag);
+
+        # No more messages
+        *AmqpMessage msg2 = consumer.receive(2s);
+        assertNothing(msg2);
     }
 
     testConsumerMultiple() {

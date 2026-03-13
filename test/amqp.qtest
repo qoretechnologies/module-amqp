@@ -82,6 +82,9 @@ public class AmqpTest inherits QUnit::Test {
         addTestCase("AmqpAddressInfo hashdecl", \testAddressInfoHashdecl());
         addTestCase("AmqpQueueInfo hashdecl", \testQueueInfoHashdecl());
 
+        # Delivery tag tests
+        addTestCase("getDeliveryTag on created message", \testDeliveryTagCreatedMessage());
+
         # Negative tests
         addTestCase("AmqpConnection missing url", \testConnectionMissingUrl());
         addTestCase("AmqpConnection invalid url", \testConnectionInvalidUrl());
@@ -502,6 +505,17 @@ public class AmqpTest inherits QUnit::Test {
         assertEq(50, info.message_count);
         assertEq(2, info.consumer_count);
         assertEq("color = 'blue'", info.filter);
+    }
+
+    # --- Delivery tag tests ---
+
+    testDeliveryTagCreatedMessage() {
+        # Messages created locally (not received) should have no delivery tag
+        AmqpMessage msg("test");
+        assertNothing(msg.getDeliveryTag());
+
+        AmqpMessage msg2(42, <AmqpMessageProperties>{"message_id": "test-id"});
+        assertNothing(msg2.getDeliveryTag());
     }
 
     # --- Negative tests ---

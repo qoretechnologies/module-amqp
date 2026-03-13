@@ -41,6 +41,8 @@ string receiver = conn.createReceiver("test-queue");
 *AmqpMessage msg = conn.receive(receiver, 5s);
 if (msg) {
     printf("Received: %y\n", msg.getBody());
+    # Acknowledge the message using its delivery tag
+    conn.accept(msg.getDeliveryTag());
 }
 conn.close();
 ```
@@ -65,7 +67,78 @@ producer.send("Message body", <AmqpMessageProperties>{"content_type": "text/plai
 Amqp::AmqpConsumer consumer = client.createConsumer("my-queue");
 *AmqpMessage received = consumer.receive(10s);
 if (received) {
+    printf("Got: %y\n", received.getBody());
     consumer.accept(received.getDeliveryTag());
+}
+
+client.close();
+```
+
+### Message Properties
+
+```qore
+%modern
+%requires amqp
+
+AmqpConnection conn(<AmqpConnectionOptions>{"url": "amqp://guest:guest@localhost:5672"});
+conn.connect();
+
+# Send a message with full properties
+string sender = conn.createSender("my-queue");
+conn.send(sender, new AmqpMessage({"order_id": 12345, "items": ("widget", "gadget")},
+    <AmqpMessageProperties>{
+        "message_id": "order-12345",
+        "content_type": "application/json",
+        "subject": "new-order",
+        "reply_to": "reply-queue",
+        "application_properties": {
+            "priority": "high",
+            "region": "us-east",
+        },
+    }));
+
+# Receive and inspect all properties
+string receiver = conn.createReceiver("my-queue");
+*AmqpMessage msg = conn.receive(receiver, 5s);
+if (msg) {
+    hash<AmqpMessageProperties> props = msg.getProperties();
+    printf("ID: %y, Subject: %y, Content-Type: %y\n",
+        props.message_id, props.subject, props.content_type);
+    printf("App props: %y\n", props.application_properties);
+    printf("Body: %y\n", msg.getBody());
+    conn.accept(msg.getDeliveryTag());
+}
+
+conn.close();
+```
+
+### Delivery Disposition
+
+```qore
+%modern
+%requires AmqpUtil
+
+Amqp::AmqpClient client("amqp://guest:guest@localhost:5672");
+client.connect();
+
+Amqp::AmqpConsumer consumer = client.createConsumer("work-queue");
+
+while (*AmqpMessage msg = consumer.receive(5s)) {
+    try {
+        # Process the message
+        auto body = msg.getBody();
+        processOrder(body);
+        # Acknowledge successful processing
+        consumer.accept(msg.getDeliveryTag());
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err == "TRANSIENT-ERROR") {
+            # Release for redelivery (will be retried)
+            consumer.release(msg.getDeliveryTag());
+        } else {
+            # Reject permanently (moves to dead-letter queue)
+            consumer.reject(msg.getDeliveryTag());
+        }
+    }
 }
 
 client.close();
@@ -103,7 +176,7 @@ Amqp::AmqpClient client("amqp://guest:guest@localhost:5672");
 client.connect();
 
 Amqp::AmqpRequestReply rr(client, "request-queue");
-AmqpMessage response = rr.request("What is the answer?", NOTHING, 30s);
+AmqpMessage response = rr.request("What is the answer?", 30s);
 printf("Reply: %y\n", response.getBody());
 rr.close();
 client.close();

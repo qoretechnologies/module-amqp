@@ -44,7 +44,8 @@ QoreAmqpMessage::QoreAmqpMessage(const QoreValue& body, const QoreHashNode* prop
     }
 }
 
-QoreAmqpMessage::QoreAmqpMessage(const proton::message& src, ExceptionSink* xsink) : msg(src) {
+QoreAmqpMessage::QoreAmqpMessage(const proton::message& src, const proton::binary& delivery_tag,
+        ExceptionSink* xsink) : msg(src), delivery_tag_(delivery_tag) {
     // Convert the proton body to a Qore value for caching
     qore_body = QoreAmqpHelper::protonToQore(msg.body(), xsink);
 }
@@ -206,6 +207,15 @@ QoreValue QoreAmqpMessage::getSubject(ExceptionSink* xsink) const {
         return QoreValue();
     }
     return new QoreStringNode(msg.subject());
+}
+
+BinaryNode* QoreAmqpMessage::getDeliveryTag() const {
+    if (delivery_tag_.empty()) {
+        return nullptr;
+    }
+    BinaryNode* tag = new BinaryNode;
+    tag->append(delivery_tag_.data(), delivery_tag_.size());
+    return tag;
 }
 
 void QoreAmqpMessage::applyProperties(const QoreHashNode* properties, ExceptionSink* xsink) {

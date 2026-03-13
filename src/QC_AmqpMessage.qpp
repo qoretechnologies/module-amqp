@@ -233,3 +233,30 @@ auto AmqpMessage::getCorrelationId() {
 *string AmqpMessage::getSubject() {
     return msg->getSubject(xsink);
 }
+
+//! Returns the delivery tag for received messages
+/** The delivery tag is a binary identifier assigned by the broker when a message
+    is received. It is used to acknowledge, reject, or release the message.
+
+    For messages created locally (not received), this returns NOTHING.
+
+    @return the delivery tag as binary data, or NOTHING if not a received message
+
+    @par Example:
+    @code{.py}
+*AmqpMessage msg = conn.receive(receiver, 5s);
+if (msg) {
+    printf("Received: %y\n", msg.getBody());
+    # Use the delivery tag to acknowledge the message
+    *binary tag = msg.getDeliveryTag();
+    if (tag) {
+        conn.accept(tag);
+    }
+}
+    @endcode
+
+    @since %amqp 1.0
+*/
+*binary AmqpMessage::getDeliveryTag() {
+    return msg->getDeliveryTag();
+}

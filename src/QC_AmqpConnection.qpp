@@ -239,7 +239,7 @@ string receiver = conn.createReceiver("test-queue");
 *AmqpMessage msg = conn.receive(receiver, 5s);
 if (msg) {
     printf("Received: %y\n", msg.getBody());
-    conn.accept(msg.getProperties().message_id);
+    conn.accept(msg.getDeliveryTag());
 }
 
 conn.close();

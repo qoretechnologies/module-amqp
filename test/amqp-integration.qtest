@@ -72,6 +72,10 @@ public class AmqpIntegrationTest inherits QUnit::Test {
         addTestCase("reject message", \testRejectMessage());
         addTestCase("release and redeliver", \testReleaseAndRedeliver());
 
+        # Delivery tag
+        addTestCase("delivery tag present", \testDeliveryTagPresent());
+        addTestCase("delivery tag unique", \testDeliveryTagUnique());
+
         set_return_value(main());
     }
 
@@ -359,8 +363,15 @@ public class AmqpIntegrationTest inherits QUnit::Test {
         @assert(msg);
         assertEq("accept-test", msg.getBody());
 
-        # Verify we got the message — accept will be tested when delivery
-        # tags are properly exposed via received message
+        # Get delivery tag and accept the message
+        *binary tag = msg.getDeliveryTag();
+        @assert(tag);
+        assertTrue(tag.size() > 0);
+        conn.accept(tag);
+
+        # Verify the message is consumed (no more messages)
+        *AmqpMessage msg2 = conn.receive(receiver, 2s);
+        assertNothing(msg2);
     }
 
     testRejectMessage() {
@@ -375,6 +386,11 @@ public class AmqpIntegrationTest inherits QUnit::Test {
         *AmqpMessage msg = conn.receive(receiver, 10s);
         @assert(msg);
         assertEq("reject-test", msg.getBody());
+
+        # Reject the message
+        *binary tag = msg.getDeliveryTag();
+        @assert(tag);
+        conn.reject(tag);
     }
 
     testReleaseAndRedeliver() {
@@ -389,5 +405,68 @@ public class AmqpIntegrationTest inherits QUnit::Test {
         *AmqpMessage msg = conn.receive(receiver, 10s);
         @assert(msg);
         assertEq("release-test", msg.getBody());
+
+        # Release the message for redelivery
+        *binary tag = msg.getDeliveryTag();
+        @assert(tag);
+        conn.release(tag);
+
+        # Message should be redelivered
+        *AmqpMessage msg2 = conn.receive(receiver, 10s);
+        @assert(msg2);
+        assertEq("release-test", msg2.getBody());
+        # Accept it this time
+        conn.accept(msg2.getDeliveryTag());
+    }
+
+    # --- Delivery tag tests ---
+
+    testDeliveryTagPresent() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        conn.send(sender, new AmqpMessage("delivery-tag-test"));
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        @assert(msg);
+
+        # Received messages must have a delivery tag
+        *binary tag = msg.getDeliveryTag();
+        @assert(tag);
+        assertTrue(tag.size() > 0);
+
+        # Accept to clean up
+        conn.accept(tag);
+    }
+
+    testDeliveryTagUnique() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        # Send two messages
+        conn.send(sender, new AmqpMessage("msg-1"));
+        conn.send(sender, new AmqpMessage("msg-2"));
+
+        # Receive both — delivery tags should be different
+        *AmqpMessage msg1 = conn.receive(receiver, 10s);
+        @assert(msg1);
+        *AmqpMessage msg2 = conn.receive(receiver, 10s);
+        @assert(msg2);
+
+        *binary tag1 = msg1.getDeliveryTag();
+        *binary tag2 = msg2.getDeliveryTag();
+        @assert(tag1);
+        @assert(tag2);
+        assertTrue(tag1 != tag2);
+
+        conn.accept(tag1);
+        conn.accept(tag2);
     }
 }
