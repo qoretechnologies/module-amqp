@@ -1,0 +1,174 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file AmqpDataProvider.qm Qore AMQP data provider module
+
+/*  AmqpDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%allow-weak-references
+
+%requires(reexport) DataProvider
+%requires(reexport) ConnectionProvider
+%requires amqp
+%requires AmqpUtil
+
+module AmqpDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for AMQP 1.0 messaging";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://github.com/qoretechnologies/module-amqp";
+    license = "MIT";
+    init = sub () {
+        # Register data provider factory
+        DataProvider::registerFactory(new AmqpDataProviderFactory());
+
+        # Register connection schemes
+        ConnectionSchemeCache::registerScheme("amqp", AmqpDataProviderConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("amqps", AmqpDataProviderConnection::ConnectionScheme);
+
+        # Register app in action catalog
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": AmqpDataProvider::AppName,
+            "display_name": "AMQP 1.0 Broker",
+            "short_desc": "AMQP 1.0 message broker",
+            "desc": "Connect to AMQP 1.0 message brokers for sending and receiving "
+                "messages with support for message properties, delivery disposition, "
+                "and broker introspection",
+            "scheme": "amqp",
+            "groups": (DataProvider::AppGroup::ApiIntegration,),
+            "logo": AmqpLogo,
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "amqp-logo.svg",
+        });
+
+        # Register send action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AmqpDataProvider::AppName,
+            "path": "/{address}",
+            "path_vars": {
+                "address": <DataProviderPathVarInfo>{
+                    "display_name": "Address",
+                    "short_desc": "The AMQP address to send to",
+                    "desc": "The AMQP address (queue or topic) to send messages to",
+                    "example_value": "my-queue",
+                },
+            },
+            "action": "send",
+            "display_name": "Send AMQP Message",
+            "short_desc": "Send a message to an AMQP address",
+            "desc": "Sends a message to the specified AMQP address",
+            "action_code": DPAT_API,
+        });
+    };
+}
+
+/** @mainpage AmqpDataProvider Module
+
+    @tableofcontents
+
+    @section amqpdataproviderintro AmqpDataProvider Module Introduction
+
+    The %AmqpDataProvider module integrates AMQP 1.0 messaging into Qore's data
+    provider framework, enabling AMQP send/receive operations to be used alongside
+    REST, gRPC, SOAP, and other protocols through a uniform API.
+
+    Key capabilities:
+    - <b>Send messages</b>: send messages to any AMQP address via \c doRequest()
+    - <b>Observable events</b>: receive messages as observable events via the
+      DataProvider observer pattern
+    - <b>Auto-discovery</b>: when \c use_management is \c True, the broker is
+      queried via the AMQP Management Protocol to auto-discover addresses
+    - <b>Connection management</b>: \c amqp:// and \c amqps:// URL schemes
+      integrate with Qore's connection framework
+
+    @subsection amqpdataprovider_hierarchy Provider Hierarchy
+
+    @verbatim
+<root>                          (AmqpDataProvider)
+  └── <address>                 (AmqpAddressDataProvider — doRequest for send)
+        └── events              (AmqpEventDataProvider — observable incoming messages)
+    @endverbatim
+
+    @subsection amqpdataprovider_classes Provided Classes
+
+    - @ref AmqpDataProvider::AmqpDataProvider "AmqpDataProvider": root provider
+      with address discovery
+    - @ref AmqpDataProvider::AmqpDataProviderFactory "AmqpDataProviderFactory":
+      factory for creating providers from options
+    - @ref AmqpDataProvider::AmqpAddressDataProvider "AmqpAddressDataProvider":
+      address-level provider supporting send via \c doRequest()
+    - @ref AmqpDataProvider::AmqpEventDataProvider "AmqpEventDataProvider":
+      observable event provider for incoming messages
+    - @ref AmqpDataProvider::AmqpDataProviderConnection "AmqpDataProviderConnection":
+      connection provider with \c amqp:// and \c amqps:// URL schemes
+
+    @section amqpdataprovider_factory AmqpDataProvider Factory
+
+    The name of the AMQP data provider factory is <b><tt>amqp</tt></b>.
+
+    @subsection amqpdataprovider_factory_options Factory Options
+
+    | Option | Type | Description |
+    |--------|------|-------------|
+    | \c url | string | Broker URL (\c amqp://host:port or \c amqps://host:port) |
+    | \c addresses | string | Comma-separated list of AMQP addresses |
+    | \c use_management | bool | Auto-discover addresses via AMQP Management Protocol (default: \c False) |
+    | \c username | string | SASL username |
+    | \c password | string | SASL password (sensitive) |
+    | \c timeout_ms | int | Default timeout in milliseconds (default: \c 30000) |
+
+    @section amqpdataprovider_examples AmqpDataProvider Examples
+
+    @subsection amqpdataprovider_examples_send Send a Message
+
+    @verbatim qdp 'amqp{url=amqp://guest:guest@localhost:5672,addresses=my-queue}/my-queue' dor body=Hello
+    @endverbatim
+
+    @subsection amqpdataprovider_examples_management Auto-Discovery
+
+    @verbatim qdp 'amqp{url=amqp://guest:guest@localhost:5672,use_management=true}' children
+    @endverbatim
+
+    @section amqpdataprovider_connections Connection Schemes
+
+    The module registers two connection URL schemes:
+    - \c amqp://host:port — plaintext AMQP 1.0
+    - \c amqps://host:port — TLS-encrypted AMQP 1.0
+
+    @section amqpdataprovider_relnotes Release Notes
+
+    @subsection amqpdataprovider_v1_0 AmqpDataProvider v1.0
+    - initial release
+    - @ref AmqpDataProvider::AmqpDataProvider "AmqpDataProvider": root provider with
+      address discovery via manual config or AMQP Management Protocol
+    - @ref AmqpDataProvider::AmqpAddressDataProvider "AmqpAddressDataProvider":
+      address-level send via \c doRequest()
+    - @ref AmqpDataProvider::AmqpEventDataProvider "AmqpEventDataProvider":
+      observable event provider for incoming messages
+    - @ref AmqpDataProvider::AmqpDataProviderConnection "AmqpDataProviderConnection":
+      \c amqp:// and \c amqps:// connection schemes
+*/
+
+#! Contains all public definitions in the AmqpDataProvider module
+public namespace AmqpDataProvider {
+    #! AMQP logo in SVG format for the action catalog
+    public const AmqpLogo = File::readTextFile(get_script_dir() + "/amqp-logo.svg");
+}

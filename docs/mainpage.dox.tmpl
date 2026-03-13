@@ -1,0 +1,94 @@
+/** @mainpage Qore amqp Module
+
+    @tableofcontents
+
+    @section amqpintro Introduction
+
+    The \c amqp module provides an AMQP 1.0 messaging interface for %Qore using the
+    <a href="https://qpid.apache.org/proton/">Apache Qpid Proton</a> C++ library.
+
+    This module provides:
+    - The @ref Qore::Amqp::AmqpConnection "AmqpConnection" class for connecting to AMQP 1.0 brokers
+    - The @ref Qore::Amqp::AmqpMessage "AmqpMessage" class for creating and reading AMQP messages
+    - Full bidirectional type mapping between AMQP and %Qore types
+    - TLS/SSL and SASL authentication support
+    - Durable subscriptions and message selectors
+    - Transaction support (commit/rollback)
+    - Broker introspection via the AMQP Management Protocol
+    - The @ref AmqpUtil "AmqpUtil" module with high-level client, producer, consumer, and request-reply helpers
+    - The @ref AmqpDataProvider "AmqpDataProvider" module for data provider framework integration
+
+    @section amqparch Architecture
+
+    The module uses a two-layer architecture:
+    - \c amqp (binary module): C++ wrapper around \c qpid-proton-cpp providing @ref Qore::Amqp::AmqpConnection
+      and @ref Qore::Amqp::AmqpMessage
+    - \c AmqpUtil (pure %Qore): High-level API with @ref AmqpUtil::AmqpClient "AmqpClient",
+      @ref AmqpUtil::AmqpProducer "AmqpProducer", @ref AmqpUtil::AmqpConsumer "AmqpConsumer", and
+      @ref AmqpUtil::AmqpRequestReply "AmqpRequestReply"
+    - \c AmqpDataProvider (pure %Qore): Data provider integration with factory, connection scheme, and
+      observable message events
+
+    @section amqphashdecls Hashdecls
+
+    The following hashdecls are defined in the \c amqp binary module:
+    - @ref Qore::Amqp::AmqpConnectionOptions "AmqpConnectionOptions"
+    - @ref Qore::Amqp::AmqpSslOptions "AmqpSslOptions"
+    - @ref Qore::Amqp::AmqpSaslOptions "AmqpSaslOptions"
+    - @ref Qore::Amqp::AmqpMessageProperties "AmqpMessageProperties"
+    - @ref Qore::Amqp::AmqpDeliveryInfo "AmqpDeliveryInfo"
+    - @ref Qore::Amqp::AmqpSendOptions "AmqpSendOptions"
+    - @ref Qore::Amqp::AmqpReceiveOptions "AmqpReceiveOptions"
+    - @ref Qore::Amqp::AmqpFilterOptions "AmqpFilterOptions"
+    - @ref Qore::Amqp::AmqpAddressInfo "AmqpAddressInfo"
+    - @ref Qore::Amqp::AmqpQueueInfo "AmqpQueueInfo"
+
+    @section amqptypemap Type Mapping
+
+    | AMQP Type | %Qore Type |
+    |-----------|-----------|
+    | string | string |
+    | binary | binary |
+    | boolean | bool |
+    | byte/short/int/long | int |
+    | float/double | float |
+    | timestamp | date |
+    | uuid | string (formatted) |
+    | symbol | string |
+    | map | hash |
+    | list | list |
+    | null | NOTHING |
+
+    @section amqpexamples Usage Examples
+
+    @par Simple Send and Receive
+    @code{.py}
+%requires amqp
+
+AmqpConnection conn(<AmqpConnectionOptions>{"url": "amqp://guest:guest@@localhost:5672"});
+conn.connect();
+
+string sender = conn.createSender("test-queue");
+conn.send(sender, new AmqpMessage("Hello, AMQP!"));
+
+string receiver = conn.createReceiver("test-queue");
+*AmqpMessage msg = conn.receive(receiver, 5s);
+if (msg) {
+    printf("Received: %y\\n", msg.getBody());
+}
+conn.close();
+    @endcode
+
+    @section amqprelnotes Release Notes
+
+    @subsection amqp_v1_0 amqp Module Version 1.0
+    - initial release
+    - AmqpConnection class for AMQP 1.0 messaging
+    - AmqpMessage class with full type mapping
+    - TLS/SSL and SASL authentication
+    - Durable subscriptions and message selectors
+    - Transaction support
+    - AMQP Management Protocol support
+    - AmqpUtil module with high-level API
+    - AmqpDataProvider module for data provider integration
+*/

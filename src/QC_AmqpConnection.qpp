@@ -1,0 +1,671 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_AmqpConnection.cpp defines the %Qore AmqpConnection class and related types */
+/*
+    Qore amqp module
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "amqp-module.h"
+#include "QC_AmqpConnection.h"
+#include "QC_AmqpMessage.h"
+#include "QoreAmqpConnection.h"
+#include "QoreAmqpMessage.h"
+
+//! SSL/TLS options for AMQP connections
+/** @since %amqp 1.0
+*/
+hashdecl Qore::Amqp::AmqpSslOptions {
+    //! Path to PEM-encoded CA certificate file for server verification
+    *string ca_cert;
+
+    //! Path to PEM-encoded client certificate file for mutual TLS
+    *string client_cert;
+
+    //! Path to PEM-encoded client private key file for mutual TLS
+    *string client_key;
+
+    //! If True, verify the server's certificate (default: True)
+    *bool verify;
+}
+
+//! SASL authentication options for AMQP connections
+/** @since %amqp 1.0
+*/
+hashdecl Qore::Amqp::AmqpSaslOptions {
+    //! SASL mechanism name (e.g., "PLAIN", "ANONYMOUS", "EXTERNAL")
+    *string mechanism;
+
+    //! Username for SASL PLAIN authentication
+    *string username;
+
+    //! Password for SASL PLAIN authentication
+    *string password;
+}
+
+//! Connection options for AMQP 1.0 connections
+/** @since %amqp 1.0
+*/
+hashdecl Qore::Amqp::AmqpConnectionOptions {
+    //! The broker URL (e.g., "amqp://guest:guest\@localhost:5672" or "amqps://...")
+    string url;
+
+    //! SSL/TLS options (only used with amqps:// URLs)
+    *hash<Qore::Amqp::AmqpSslOptions> ssl;
+
+    //! SASL authentication options
+    *hash<Qore::Amqp::AmqpSaslOptions> sasl;
+
+    //! Heartbeat interval in seconds (0 = disabled)
+    *int heartbeat;
+
+    //! Idle timeout in milliseconds (0 = disabled)
+    *int idle_timeout;
+
+    //! Maximum frame size in bytes
+    *int max_frame_size;
+
+    //! Container ID for this connection (auto-generated if not provided)
+    *string container_id;
+
+    //! Virtual host for the connection
+    *string virtual_host;
+
+    //! Enable automatic reconnection (default: False)
+    *bool reconnect;
+
+    //! Maximum number of reconnect attempts (0 = unlimited)
+    *int max_reconnect_attempts;
+
+    //! Delay between reconnect attempts in milliseconds
+    *int reconnect_delay_ms;
+}
+
+//! Information about a message delivery
+/** @since %amqp 1.0
+*/
+hashdecl Qore::Amqp::AmqpDeliveryInfo {
+    //! The delivery tag (binary identifier for this delivery)
+    binary tag;
+
+    //! Whether the delivery was settled (True = no further disposition needed)
+    bool settled;
+
+    //! The delivery state (e.g., "accepted", "rejected", "released", "modified")
+    string state;
+
+    //! Remote delivery state (from the broker)
+    *string remote_state;
+}
+
+//! Options for sending an AMQP message
+/** @since %amqp 1.0
+*/
+hashdecl Qore::Amqp::AmqpSendOptions {
+    //! Time-to-live in milliseconds (0 = no expiration)
+    *int ttl;
+
+    //! Message priority (0-9, where 9 is highest)
+    *int priority;
+
+    //! Whether the message should be persisted durably
+    *bool durable;
+
+    //! Whether this is the first acquirer of the message
+    *bool first_acquirer;
+
+    //! The number of previous delivery attempts
+    *int delivery_count;
+
+    //! Sender settle mode ("unsettled", "settled", "mixed")
+    *string settle_mode;
+}
+
+//! Options for receiving AMQP messages
+/** @since %amqp 1.0
+*/
+hashdecl Qore::Amqp::AmqpReceiveOptions {
+    //! Link credit (number of messages to prefetch)
+    *int credit;
+
+    //! Default receive timeout in milliseconds
+    *int timeout_ms;
+
+    //! Automatically accept received messages (default: False)
+    *bool auto_accept;
+
+    //! Prefetch count (number of messages to buffer)
+    *int prefetch;
+
+    //! Durable subscription name (for durable subscriptions)
+    *string durable_name;
+}
+
+//! Options for message filtering on a receiver
+/** @since %amqp 1.0
+*/
+hashdecl Qore::Amqp::AmqpFilterOptions {
+    //! JMS/SQL-like selector expression (e.g., "color = 'red' AND size > 10")
+    /** Uses the \c apache.org:selector-filter:string descriptor.
+        The selector operates on application-properties of the message.
+    */
+    *string selector;
+
+    //! Custom AMQP filter descriptors as a hash
+    /** Keys are filter names, values are filter descriptor values.
+        Use this for non-standard or broker-specific filters.
+    */
+    *hash<auto> filter_set;
+}
+
+//! Information about an AMQP address
+/** Returned by management protocol queries.
+
+    @since %amqp 1.0
+*/
+hashdecl Qore::Amqp::AmqpAddressInfo {
+    //! The address name
+    string name;
+
+    //! Routing type ("anycast" or "multicast")
+    string routing_type;
+
+    //! Number of queues bound to this address
+    int queue_count;
+
+    //! Total number of messages across all queues
+    int message_count;
+}
+
+//! Information about an AMQP queue
+/** Returned by management protocol queries.
+
+    @since %amqp 1.0
+*/
+hashdecl Qore::Amqp::AmqpQueueInfo {
+    //! The queue name
+    string name;
+
+    //! The address this queue is bound to
+    string address;
+
+    //! Routing type ("anycast" or "multicast")
+    string routing_type;
+
+    //! Whether the queue is durable
+    bool durable;
+
+    //! Number of messages in the queue
+    int message_count;
+
+    //! Number of active consumers
+    int consumer_count;
+
+    //! Filter expression applied to the queue (if any)
+    *string filter;
+}
+
+//! The AmqpConnection class provides AMQP 1.0 messaging using Qpid Proton
+/**
+    @par Example: Simple send and receive
+    @code{.py}
+%requires amqp
+
+AmqpConnection conn(<AmqpConnectionOptions>{"url": "amqp://guest:guest\@localhost:5672"});
+conn.connect();
+
+string sender = conn.createSender("test-queue");
+conn.send(sender, new AmqpMessage("Hello, AMQP!"));
+
+string receiver = conn.createReceiver("test-queue");
+*AmqpMessage msg = conn.receive(receiver, 5s);
+if (msg) {
+    printf("Received: %y\n", msg.getBody());
+    conn.accept(msg.getProperties().message_id);
+}
+
+conn.close();
+    @endcode
+
+    @par Example: Transaction support
+    @code{.py}
+conn.beginTransaction();
+conn.send(sender, new AmqpMessage("transacted message"));
+conn.commitTransaction();
+    @endcode
+
+    @since %amqp 1.0
+*/
+qclass AmqpConnection [arg=QoreAmqpConnection* conn; ns=Qore::Amqp; dom=NETWORK];
+
+//! Creates a new AmqpConnection with the given options
+/** @param options connection options including the broker URL
+
+    @throw AMQP-CONNECTION-ERROR if the options are invalid
+
+    @par Example:
+    @code{.py}
+AmqpConnection conn(<AmqpConnectionOptions>{
+    "url": "amqp://guest:guest\@localhost:5672",
+    "heartbeat": 30,
+});
+    @endcode
+
+    @since %amqp 1.0
+*/
+AmqpConnection::constructor(hash<AmqpConnectionOptions> options) {
+    self->setPrivate(CID_AMQPCONNECTION, new QoreAmqpConnection(options, xsink));
+}
+
+//! Connects to the AMQP broker
+/** @throw AMQP-CONNECTION-ERROR if the connection fails
+
+    @par Example:
+    @code{.py}
+conn.connect();
+    @endcode
+
+    @since %amqp 1.0
+*/
+nothing AmqpConnection::connect() [dom=NETWORK] {
+    conn->connect(xsink);
+}
+
+//! Closes the connection to the AMQP broker
+/** @par Example:
+    @code{.py}
+conn.close();
+    @endcode
+
+    @since %amqp 1.0
+*/
+nothing AmqpConnection::close() {
+    conn->close(xsink);
+}
+
+//! Returns True if the connection is currently open
+/** @return True if connected, False otherwise
+
+    @par Example:
+    @code{.py}
+if (conn.isConnected()) {
+    printf("Connected!\n");
+}
+    @endcode
+
+    @since %amqp 1.0
+*/
+bool AmqpConnection::isConnected() {
+    return conn->isConnected();
+}
+
+//! Creates a sender link for the given address
+/** @param address the AMQP address to send messages to
+    @param opts optional sender options
+
+    @return the sender link name (used to identify this sender in send() calls)
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-SENDER-ERROR if the sender cannot be created
+
+    @par Example:
+    @code{.py}
+string sender = conn.createSender("my-queue");
+    @endcode
+
+    @since %amqp 1.0
+*/
+string AmqpConnection::createSender(string address, *hash<auto> opts) [dom=NETWORK] {
+    return conn->createSender(address->c_str(), opts, xsink);
+}
+
+//! Creates a receiver link for the given address
+/** @param address the AMQP address to receive messages from
+    @param opts optional receiver options
+
+    @return the receiver link name (used to identify this receiver in receive() calls)
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-RECEIVER-ERROR if the receiver cannot be created
+
+    @par Example:
+    @code{.py}
+string receiver = conn.createReceiver("my-queue");
+    @endcode
+
+    @since %amqp 1.0
+*/
+string AmqpConnection::createReceiver(string address, *hash<AmqpReceiveOptions> opts) [dom=NETWORK] {
+    return conn->createReceiver(address->c_str(), opts, nullptr, xsink);
+}
+
+//! Sends a message using the named sender
+/** @param sender the sender link name (returned by createSender())
+    @param msg the message to send
+    @param opts optional send options
+
+    @return delivery information for the sent message
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-SEND-ERROR if the message cannot be sent
+
+    @par Example:
+    @code{.py}
+hash<AmqpDeliveryInfo> info = conn.send(sender, new AmqpMessage("Hello!"));
+    @endcode
+
+    @since %amqp 1.0
+*/
+hash<AmqpDeliveryInfo> AmqpConnection::send(string sender, AmqpMessage[QoreAmqpMessage] msg, *hash<AmqpSendOptions> opts) [dom=NETWORK] {
+    return conn->send(sender->c_str(), **msg, opts, xsink);
+}
+
+//! Receives a message from the named receiver
+/** Blocks until a message is available or the timeout expires.
+    Uses cooperative cancellation (polls every 500ms with qore_check_cancel()).
+
+    @param receiver the receiver link name (returned by createReceiver())
+    @param timeout the maximum time to wait for a message
+
+    @return the received message, or NOTHING if the timeout expired
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-RECEIVE-ERROR if the receive operation fails
+    @throw THREAD-CANCELLED if the thread is cancelled during receive
+
+    @par Example:
+    @code{.py}
+*AmqpMessage msg = conn.receive(receiver, 10s);
+if (msg) {
+    printf("Received: %y\n", msg.getBody());
+}
+    @endcode
+
+    @since %amqp 1.0
+*/
+*AmqpMessage AmqpConnection::receive(string receiver, timeout timeout) [dom=NETWORK] {
+    return conn->receive(self, receiver->c_str(), timeout, xsink);
+}
+
+//! Accepts a delivered message (removes it from the queue)
+/** @param delivery_tag the delivery tag from the received message
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-DELIVERY-ERROR if the delivery tag is not found
+
+    @par Example:
+    @code{.py}
+conn.accept(delivery_tag);
+    @endcode
+
+    @since %amqp 1.0
+*/
+nothing AmqpConnection::accept(binary delivery_tag) {
+    conn->accept(delivery_tag, xsink);
+}
+
+//! Rejects a delivered message (moves to DLQ or discards)
+/** @param delivery_tag the delivery tag from the received message
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-DELIVERY-ERROR if the delivery tag is not found
+
+    @par Example:
+    @code{.py}
+conn.reject(delivery_tag);
+    @endcode
+
+    @since %amqp 1.0
+*/
+nothing AmqpConnection::reject(binary delivery_tag) {
+    conn->reject(delivery_tag, xsink);
+}
+
+//! Releases a delivered message (makes it available for redelivery)
+/** @param delivery_tag the delivery tag from the received message
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-DELIVERY-ERROR if the delivery tag is not found
+
+    @par Example:
+    @code{.py}
+conn.release(delivery_tag);
+    @endcode
+
+    @since %amqp 1.0
+*/
+nothing AmqpConnection::release(binary delivery_tag) {
+    conn->release(delivery_tag, xsink);
+}
+
+//! Modifies a delivered message with new state
+/** @param delivery_tag the delivery tag from the received message
+    @param failed if True, indicates the message was not processed successfully
+    @param undeliverable if True, indicates the message should not be redelivered to this consumer
+    @param annotations optional message annotations to add
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-DELIVERY-ERROR if the delivery tag is not found
+
+    @par Example:
+    @code{.py}
+conn.modify(delivery_tag, True, False);
+    @endcode
+
+    @since %amqp 1.0
+*/
+nothing AmqpConnection::modify(binary delivery_tag, bool failed, bool undeliverable, *hash<auto> annotations) {
+    conn->modify(delivery_tag, failed, undeliverable, annotations, xsink);
+}
+
+//! Begins a new AMQP transaction
+/** @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-TRANSACTION-ERROR if a transaction is already active
+
+    @par Example:
+    @code{.py}
+conn.beginTransaction();
+conn.send(sender, new AmqpMessage("transacted"));
+conn.commitTransaction();
+    @endcode
+
+    @since %amqp 1.0
+*/
+nothing AmqpConnection::beginTransaction() [dom=NETWORK] {
+    conn->beginTransaction(xsink);
+}
+
+//! Commits the current transaction
+/** @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-TRANSACTION-ERROR if no transaction is active
+
+    @par Example:
+    @code{.py}
+conn.commitTransaction();
+    @endcode
+
+    @since %amqp 1.0
+*/
+nothing AmqpConnection::commitTransaction() [dom=NETWORK] {
+    conn->commitTransaction(xsink);
+}
+
+//! Rolls back the current transaction
+/** @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-TRANSACTION-ERROR if no transaction is active
+
+    @par Example:
+    @code{.py}
+conn.rollbackTransaction();
+    @endcode
+
+    @since %amqp 1.0
+*/
+nothing AmqpConnection::rollbackTransaction() [dom=NETWORK] {
+    conn->rollbackTransaction(xsink);
+}
+
+//! Returns True if a transaction is currently active
+/** @return True if a transaction is active, False otherwise
+
+    @par Example:
+    @code{.py}
+if (conn.inTransaction()) {
+    conn.commitTransaction();
+}
+    @endcode
+
+    @since %amqp 1.0
+*/
+bool AmqpConnection::inTransaction() {
+    return conn->inTransaction();
+}
+
+//! Creates a durable receiver (subscription persists across disconnects)
+/** @param address the AMQP address to receive messages from
+    @param subscription_name a unique name for this durable subscription
+    @param opts optional receiver options
+    @param filter optional filter options for message selection
+
+    @return the receiver link name
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-RECEIVER-ERROR if the receiver cannot be created
+
+    @par Example:
+    @code{.py}
+string receiver = conn.createDurableReceiver("topic/news", "my-durable-sub");
+    @endcode
+
+    @since %amqp 1.0
+*/
+string AmqpConnection::createDurableReceiver(string address, string subscription_name, *hash<AmqpReceiveOptions> opts, *hash<AmqpFilterOptions> filter) [dom=NETWORK] {
+    return conn->createDurableReceiver(address->c_str(), subscription_name->c_str(), opts, filter, xsink);
+}
+
+//! Closes a durable receiver without unsubscribing
+/** The durable subscription persists on the broker and will continue to accumulate messages.
+
+    @param receiver_name the receiver link name to close
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-RECEIVER-ERROR if the receiver is not found
+
+    @par Example:
+    @code{.py}
+conn.closeDurableReceiver(receiver);
+    @endcode
+
+    @since %amqp 1.0
+*/
+nothing AmqpConnection::closeDurableReceiver(string receiver_name) {
+    conn->closeDurableReceiver(receiver_name->c_str(), xsink);
+}
+
+//! Permanently removes a durable subscription from the broker
+/** @param subscription_name the name of the durable subscription to remove
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-SUBSCRIPTION-ERROR if the subscription cannot be removed
+
+    @par Example:
+    @code{.py}
+conn.unsubscribeDurable("my-durable-sub");
+    @endcode
+
+    @since %amqp 1.0
+*/
+nothing AmqpConnection::unsubscribeDurable(string subscription_name) [dom=NETWORK] {
+    conn->unsubscribeDurable(subscription_name->c_str(), xsink);
+}
+
+//! Queries all addresses from the broker via the AMQP Management Protocol
+/** @return a list of address info hashes, or an empty list if the broker does not support management
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+
+    @par Example:
+    @code{.py}
+list<hash<AmqpAddressInfo>> addresses = conn.queryAddresses();
+for (hash<AmqpAddressInfo> addr in addresses) {
+    printf("Address: %s (type: %s, queues: %d)\n", addr.name, addr.routing_type, addr.queue_count);
+}
+    @endcode
+
+    @since %amqp 1.0
+*/
+list<hash<AmqpAddressInfo>> AmqpConnection::queryAddresses() [dom=NETWORK] {
+    return conn->queryAddresses(xsink);
+}
+
+//! Queries queues from the broker, optionally filtered by address
+/** @param address optional address name to filter by
+
+    @return a list of queue info hashes, or an empty list if the broker does not support management
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+
+    @par Example:
+    @code{.py}
+list<hash<AmqpQueueInfo>> queues = conn.queryQueues("my-address");
+    @endcode
+
+    @since %amqp 1.0
+*/
+list<hash<AmqpQueueInfo>> AmqpConnection::queryQueues(*string address) [dom=NETWORK] {
+    return conn->queryQueues(address ? address->c_str() : nullptr, xsink);
+}
+
+//! Gets detailed information about a specific address
+/** @param address the address name
+
+    @return a hash with address details, or NOTHING if not found or management not supported
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+
+    @par Example:
+    @code{.py}
+*hash<auto> info = conn.getAddressInfo("my-address");
+    @endcode
+
+    @since %amqp 1.0
+*/
+*hash<auto> AmqpConnection::getAddressInfo(string address) [dom=NETWORK] {
+    return conn->getAddressInfo(address->c_str(), xsink);
+}
+
+//! Gets detailed information about a specific queue
+/** @param queue the queue name
+
+    @return a hash with queue details, or NOTHING if not found or management not supported
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+
+    @par Example:
+    @code{.py}
+*hash<auto> info = conn.getQueueInfo("my-queue");
+    @endcode
+
+    @since %amqp 1.0
+*/
+*hash<auto> AmqpConnection::getQueueInfo(string queue) [dom=NETWORK] {
+    return conn->getQueueInfo(queue->c_str(), xsink);
+}

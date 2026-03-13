@@ -1,0 +1,235 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_AmqpMessage.cpp defines the %Qore AmqpMessage class and related types */
+/*
+    Qore amqp module
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "amqp-module.h"
+#include "QC_AmqpMessage.h"
+#include "QoreAmqpMessage.h"
+
+//! Properties for an AMQP 1.0 message
+/** These properties correspond to the AMQP 1.0 message properties, application-properties,
+    and annotation sections.
+
+    @since %amqp 1.0
+*/
+hashdecl Qore::Amqp::AmqpMessageProperties {
+    //! The message identifier (string, int, binary, or UUID string)
+    auto message_id;
+
+    //! Correlation identifier for request-reply (string, int, binary, or UUID string)
+    auto correlation_id;
+
+    //! The address of the node to send replies to
+    *string reply_to;
+
+    //! MIME content type of the message body (e.g., "application/json")
+    *string content_type;
+
+    //! MIME content encoding of the message body (e.g., "gzip")
+    *string content_encoding;
+
+    //! The subject of the message
+    *string subject;
+
+    //! The address of the node the message is intended for
+    *string to;
+
+    //! The group this message belongs to
+    *string group_id;
+
+    //! The sequence number within the group
+    *int group_sequence;
+
+    //! The group the reply message belongs to
+    *string reply_to_group_id;
+
+    //! Absolute expiry time of the message
+    *date expiry_time;
+
+    //! Creation time of the message
+    *date creation_time;
+
+    //! Application-specific properties (key-value pairs)
+    *hash<auto> application_properties;
+
+    //! Delivery annotations (key-value pairs set by intermediaries)
+    *hash<auto> delivery_annotations;
+
+    //! Message annotations (key-value pairs for infrastructure use)
+    *hash<auto> message_annotations;
+
+    //! Footer properties (key-value pairs at the end of the message)
+    *hash<auto> footer;
+}
+
+//! The AmqpMessage class represents an AMQP 1.0 message with a body and properties
+/**
+    @par Example: Creating a message with a string body
+    @code{.py}
+%requires amqp
+
+AmqpMessage msg("Hello, World!");
+    @endcode
+
+    @par Example: Creating a message with properties
+    @code{.py}
+AmqpMessage msg({"key": "value"}, <AmqpMessageProperties>{
+    "content_type": "application/json",
+    "message_id": "msg-001",
+    "application_properties": {"color": "red"},
+});
+    @endcode
+
+    @since %amqp 1.0
+*/
+qclass AmqpMessage [arg=QoreAmqpMessage* msg; ns=Qore::Amqp];
+
+//! Creates a new AmqpMessage with the given body and optional properties
+/** @param body the message body (string, binary, hash, list, int, float, bool, date, or NOTHING)
+    @param properties optional message properties
+
+    @par Example:
+    @code{.py}
+AmqpMessage msg("Hello, World!");
+AmqpMessage msg2({"key": "value"}, <AmqpMessageProperties>{"content_type": "application/json"});
+    @endcode
+
+    @since %amqp 1.0
+*/
+AmqpMessage::constructor(auto body, *hash<AmqpMessageProperties> properties) {
+    self->setPrivate(CID_AMQPMESSAGE, new QoreAmqpMessage(body, properties, xsink));
+}
+
+//! Returns the message body
+/** @return the message body value
+
+    @par Example:
+    @code{.py}
+auto body = msg.getBody();
+    @endcode
+
+    @since %amqp 1.0
+*/
+auto AmqpMessage::getBody() {
+    return msg->getBody(xsink);
+}
+
+//! Returns all message properties
+/** @return the message properties
+
+    @par Example:
+    @code{.py}
+hash<AmqpMessageProperties> props = msg.getProperties();
+    @endcode
+
+    @since %amqp 1.0
+*/
+hash<AmqpMessageProperties> AmqpMessage::getProperties() {
+    return msg->getProperties(xsink);
+}
+
+//! Returns the application properties
+/** @return the application properties hash, or NOTHING if not set
+
+    @par Example:
+    @code{.py}
+*hash<auto> app_props = msg.getApplicationProperties();
+    @endcode
+
+    @since %amqp 1.0
+*/
+*hash<auto> AmqpMessage::getApplicationProperties() {
+    return msg->getApplicationProperties(xsink);
+}
+
+//! Returns the content type
+/** @return the content type string, or NOTHING if not set
+
+    @par Example:
+    @code{.py}
+*string ct = msg.getContentType();
+    @endcode
+
+    @since %amqp 1.0
+*/
+*string AmqpMessage::getContentType() {
+    return msg->getContentType(xsink);
+}
+
+//! Returns the message ID
+/** @return the message ID (string, int, binary, or UUID string), or NOTHING if not set
+
+    @par Example:
+    @code{.py}
+auto id = msg.getMessageId();
+    @endcode
+
+    @since %amqp 1.0
+*/
+auto AmqpMessage::getMessageId() {
+    return msg->getMessageId(xsink);
+}
+
+//! Returns the correlation ID
+/** @return the correlation ID (string, int, binary, or UUID string), or NOTHING if not set
+
+    @par Example:
+    @code{.py}
+auto cid = msg.getCorrelationId();
+    @endcode
+
+    @since %amqp 1.0
+*/
+auto AmqpMessage::getCorrelationId() {
+    return msg->getCorrelationId(xsink);
+}
+
+//! Returns the reply-to address
+/** @return the reply-to address string, or NOTHING if not set
+
+    @par Example:
+    @code{.py}
+*string reply_to = msg.getReplyTo();
+    @endcode
+
+    @since %amqp 1.0
+*/
+*string AmqpMessage::getReplyTo() {
+    return msg->getReplyTo(xsink);
+}
+
+//! Returns the message subject
+/** @return the subject string, or NOTHING if not set
+
+    @par Example:
+    @code{.py}
+*string subj = msg.getSubject();
+    @endcode
+
+    @since %amqp 1.0
+*/
+*string AmqpMessage::getSubject() {
+    return msg->getSubject(xsink);
+}

@@ -1,0 +1,239 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    AmqpDataProvider module test suite
+*/
+
+%modern
+
+%requires QUnit
+%requires amqp
+%requires AmqpUtil
+%requires AmqpDataProvider
+
+%exec-class AmqpDataProviderTest
+
+public class AmqpDataProviderTest inherits QUnit::Test {
+    private {
+        *string url;
+        int test_counter = 0;
+    }
+
+    constructor() : Test("AmqpDataProviderTest", "1.0") {
+        # Unit tests (no broker needed)
+        addTestCase("factory registration", \testFactoryRegistration());
+        addTestCase("factory info", \testFactoryInfo());
+        addTestCase("connection scheme registration", \testConnectionSchemeRegistration());
+        addTestCase("provider info", \testProviderInfo());
+
+        url = ENV.AMQP_TEST_URL;
+        if (url) {
+            # Integration tests (require broker)
+            addTestCase("provider construction", \testProviderConstruction());
+            addTestCase("provider children", \testProviderChildren());
+            addTestCase("address provider doRequest", \testAddressDoRequest());
+            addTestCase("address provider children", \testAddressChildren());
+            addTestCase("send and receive via provider", \testSendAndReceive());
+            addTestCase("connection ping", \testConnectionPing());
+            addTestCase("connection getDataProvider", \testConnectionGetDataProvider());
+            addTestCase("provider with management", \testProviderWithManagement());
+            addTestCase("missing url throws", \testMissingUrlThrows());
+        } else {
+            printf("AMQP_TEST_URL not set, skipping integration tests\n");
+        }
+
+        set_return_value(main());
+    }
+
+    private string getUniqueAddress() {
+        return sprintf("test-dp-%d-%d", getpid(), ++test_counter);
+    }
+
+    # --- Unit tests ---
+
+    testFactoryRegistration() {
+        AbstractDataProviderFactory factory = DataProvider::getFactory("amqp");
+        @assert(factory);
+        assertEq("amqp", factory.getInfo().name);
+    }
+
+    testFactoryInfo() {
+        AbstractDataProviderFactory factory = DataProvider::getFactory("amqp");
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("amqp", info.name);
+        assertEq(True, info.children_can_support_apis);
+        assertEq(True, info.children_can_support_observers);
+    }
+
+    testConnectionSchemeRegistration() {
+        *hash<auto> amqp_scheme = ConnectionSchemeCache::getScheme("amqp");
+        assertTrue(exists amqp_scheme);
+        *hash<auto> amqps_scheme = ConnectionSchemeCache::getScheme("amqps");
+        assertTrue(exists amqps_scheme);
+    }
+
+    testProviderInfo() {
+        hash<DataProviderInfo> info = AmqpDataProvider::ProviderInfo;
+        assertEq("AmqpDataProvider", info.type);
+        assertEq(True, info.supports_children);
+        assertEq(True, info.children_can_support_apis);
+        assertEq(True, info.children_can_support_observers);
+    }
+
+    # --- Integration tests ---
+
+    testProviderConstruction() {
+        string addr = getUniqueAddress();
+        AmqpDataProvider provider({
+            "url": url,
+            "addresses": addr,
+        });
+        assertEq(True, provider.getName().find("AMQP") >= 0);
+        @assert(provider.getDesc());
+    }
+
+    testProviderChildren() {
+        string addr1 = getUniqueAddress();
+        string addr2 = getUniqueAddress();
+        AmqpDataProvider provider({
+            "url": url,
+            "addresses": addr1 + "," + addr2,
+        });
+        *list<string> children = provider.getChildProviderNames();
+        assertEq(2, children.size());
+        assertEq(True, inlist(addr1, children));
+        assertEq(True, inlist(addr2, children));
+
+        # Non-existent address returns NOTHING
+        assertNothing(provider.getChildProvider("nonexistent"));
+    }
+
+    testAddressDoRequest() {
+        string addr = getUniqueAddress();
+        AmqpDataProvider provider({
+            "url": url,
+            "addresses": addr,
+        });
+        AbstractDataProvider address_dp = provider.getChildProvider(addr);
+        @assert(address_dp);
+        assertEq(addr, address_dp.getName());
+
+        # Check request and response types
+        @assert(address_dp.getRequestType());
+        @assert(address_dp.getResponseType());
+
+        # Send a message via doRequest
+        auto result = address_dp.doRequest({"body": "Hello from DataProvider!"});
+        @assert(result);
+        assertEq("string", result.state.type());
+    }
+
+    testAddressChildren() {
+        string addr = getUniqueAddress();
+        AmqpDataProvider provider({
+            "url": url,
+            "addresses": addr,
+        });
+        AbstractDataProvider address_dp = provider.getChildProvider(addr);
+        *list<string> children = address_dp.getChildProviderNames();
+        assertEq(1, children.size());
+        assertEq("events", children[0]);
+
+        AbstractDataProvider events_dp = address_dp.getChildProvider("events");
+        @assert(events_dp);
+        assertEq("events", events_dp.getName());
+    }
+
+    testSendAndReceive() {
+        string addr = getUniqueAddress();
+
+        # First create a receiver via a separate client
+        Amqp::AmqpClient client(url);
+        client.connect();
+        on_exit client.close();
+        string receiver = client.getConnection().createReceiver(addr);
+
+        # Now send via data provider
+        AmqpDataProvider provider({
+            "url": url,
+            "addresses": addr,
+        });
+        AbstractDataProvider address_dp = provider.getChildProvider(addr);
+        auto result = address_dp.doRequest({
+            "body": "dp-test-msg",
+            "content_type": "text/plain",
+            "message_id": "dp-msg-001",
+        });
+        @assert(result);
+
+        # Receive the message
+        *AmqpMessage msg = client.getConnection().receive(receiver, 10s);
+        @assert(msg);
+        assertEq("dp-test-msg", msg.getBody());
+        assertEq("text/plain", msg.getContentType());
+        assertEq("dp-msg-001", msg.getMessageId());
+    }
+
+    testConnectionPing() {
+        AmqpDataProviderConnection conn("test-conn", "Test AMQP connection", url);
+        hash<PingInfo> ping = conn.ping();
+        assertEq(True, ping.ok);
+    }
+
+    testConnectionGetDataProvider() {
+        string addr = getUniqueAddress();
+        AmqpDataProviderConnection conn("test-conn", "Test AMQP connection", url, {},
+            {"addresses": addr});
+        AbstractDataProvider dp = conn.getDataProvider();
+        @assert(dp);
+
+        *list<string> children = dp.getChildProviderNames();
+        assertEq(1, children.size());
+        assertEq(addr, children[0]);
+    }
+
+    testProviderWithManagement() {
+        # Create an address by sending a message first
+        string addr = getUniqueAddress();
+        Amqp::AmqpClient client(url);
+        client.connect();
+        client.send(addr, "mgmt test");
+        client.close();
+
+        # Now create provider with management discovery
+        AmqpDataProvider provider({
+            "url": url,
+            "use_management": True,
+        });
+        # Should not throw, even if management not supported
+        *list<string> children = provider.getChildProviderNames();
+        assertEq(NT_LIST, children.typeCode());
+    }
+
+    testMissingUrlThrows() {
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            AmqpDataProvider provider({});
+        });
+    }
+}

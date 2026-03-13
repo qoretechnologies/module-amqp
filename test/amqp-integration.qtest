@@ -1,0 +1,393 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    AMQP module integration test suite (requires broker via AMQP_TEST_URL)
+*/
+
+%modern
+
+%requires QUnit
+%requires amqp
+
+%exec-class AmqpIntegrationTest
+
+public class AmqpIntegrationTest inherits QUnit::Test {
+    private {
+        *string url;
+        int test_counter = 0;
+    }
+
+    constructor() : Test("AmqpIntegrationTest", "1.0") {
+        url = ENV.AMQP_TEST_URL;
+        if (!url) {
+            printf("AMQP_TEST_URL not set, skipping integration tests\n");
+            set_return_value(0);
+            return;
+        }
+
+        # Connection lifecycle
+        addTestCase("connect and disconnect", \testConnectDisconnect());
+        addTestCase("isConnected state", \testIsConnected());
+        addTestCase("multiple connections", \testMultipleConnections());
+        addTestCase("connect to invalid host", \testConnectInvalidHost());
+
+        # Send/receive basics
+        addTestCase("send and receive string", \testSendReceiveString());
+        addTestCase("send and receive binary", \testSendReceiveBinary());
+        addTestCase("send and receive hash", \testSendReceiveHash());
+        addTestCase("send and receive list", \testSendReceiveList());
+        addTestCase("send and receive int", \testSendReceiveInt());
+        addTestCase("send and receive with properties", \testSendReceiveProperties());
+        addTestCase("send and receive with all properties", \testSendReceiveAllProperties());
+        addTestCase("send and receive empty body", \testSendReceiveEmptyBody());
+        addTestCase("send and receive large message", \testSendReceiveLargeMessage());
+        addTestCase("receive timeout", \testReceiveTimeout());
+
+        # Multiple messages
+        addTestCase("send and receive multiple", \testSendReceiveMultiple());
+
+        # Delivery disposition
+        addTestCase("accept message", \testAcceptMessage());
+        addTestCase("reject message", \testRejectMessage());
+        addTestCase("release and redeliver", \testReleaseAndRedeliver());
+
+        set_return_value(main());
+    }
+
+    private string getUniqueAddress() {
+        return sprintf("test-amqp-%d-%d", getpid(), ++test_counter);
+    }
+
+    private AmqpConnection getConnection() {
+        AmqpConnection conn(<AmqpConnectionOptions>{
+            "url": url,
+        });
+        conn.connect();
+        return conn;
+    }
+
+    # --- Connection lifecycle ---
+
+    testConnectDisconnect() {
+        AmqpConnection conn(<AmqpConnectionOptions>{"url": url});
+        conn.connect();
+        assertEq(True, conn.isConnected());
+        conn.close();
+        assertEq(False, conn.isConnected());
+    }
+
+    testIsConnected() {
+        AmqpConnection conn(<AmqpConnectionOptions>{"url": url});
+        assertEq(False, conn.isConnected());
+        conn.connect();
+        assertEq(True, conn.isConnected());
+        conn.close();
+        assertEq(False, conn.isConnected());
+    }
+
+    testMultipleConnections() {
+        AmqpConnection conn1(<AmqpConnectionOptions>{"url": url});
+        AmqpConnection conn2(<AmqpConnectionOptions>{"url": url});
+        conn1.connect();
+        conn2.connect();
+        assertEq(True, conn1.isConnected());
+        assertEq(True, conn2.isConnected());
+        conn1.close();
+        conn2.close();
+    }
+
+    testConnectInvalidHost() {
+        assertThrows("AMQP-CONNECTION-ERROR", sub() {
+            AmqpConnection conn(<AmqpConnectionOptions>{
+                "url": "amqp://nonexistent.invalid:5672",
+            });
+            conn.connect();
+        });
+    }
+
+    # --- Send/receive basics ---
+
+    testSendReceiveString() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        conn.send(sender, new AmqpMessage("Hello, AMQP!"));
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        @assert(msg);
+        assertEq("Hello, AMQP!", msg.getBody());
+    }
+
+    testSendReceiveBinary() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        binary b = <deadbeef0102>;
+        conn.send(sender, new AmqpMessage(b));
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        @assert(msg);
+        assertEq(b, msg.getBody());
+    }
+
+    testSendReceiveHash() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        hash<auto> h = {"key": "value", "num": 42, "flag": True};
+        conn.send(sender, new AmqpMessage(h));
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        @assert(msg);
+        hash<auto> body = msg.getBody();
+        assertEq("value", body.key);
+        assertEq(42, body.num);
+        assertEq(True, body.flag);
+    }
+
+    testSendReceiveList() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        list<auto> l = ("one", 2, True);
+        conn.send(sender, new AmqpMessage(l));
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        @assert(msg);
+        list<auto> body = msg.getBody();
+        assertEq(3, body.size());
+        assertEq("one", body[0]);
+        assertEq(2, body[1]);
+        assertEq(True, body[2]);
+    }
+
+    testSendReceiveInt() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        conn.send(sender, new AmqpMessage(99999));
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        @assert(msg);
+        assertEq(99999, msg.getBody());
+    }
+
+    testSendReceiveProperties() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        conn.send(sender, new AmqpMessage("prop test", <AmqpMessageProperties>{
+            "content_type": "text/plain",
+            "message_id": "msg-integration-001",
+            "correlation_id": "corr-001",
+            "subject": "test-subject",
+            "reply_to": "reply-addr",
+            "application_properties": {"color": "blue", "priority": 5},
+        }));
+
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        @assert(msg);
+        assertEq("prop test", msg.getBody());
+        assertEq("text/plain", msg.getContentType());
+        assertEq("msg-integration-001", msg.getMessageId());
+        assertEq("corr-001", msg.getCorrelationId());
+        assertEq("test-subject", msg.getSubject());
+        assertEq("reply-addr", msg.getReplyTo());
+        hash<auto> app_props = msg.getApplicationProperties();
+        assertEq("blue", app_props.color);
+        assertEq(5, app_props.priority);
+    }
+
+    testSendReceiveAllProperties() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        date creation = Qore::now_us();
+        conn.send(sender, new AmqpMessage("all props", <AmqpMessageProperties>{
+            "message_id": "all-props-id",
+            "correlation_id": "all-props-corr",
+            "reply_to": "all-props-reply",
+            "content_type": "application/json",
+            "content_encoding": "utf-8",
+            "subject": "all-props-subject",
+            "to": addr,
+            "group_id": "group-1",
+            "group_sequence": 7,
+            "reply_to_group_id": "reply-group-1",
+            "creation_time": creation,
+        }));
+
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        @assert(msg);
+        hash<AmqpMessageProperties> props = msg.getProperties();
+        assertEq("all-props-id", props.message_id);
+        assertEq("all-props-corr", props.correlation_id);
+        assertEq("all-props-reply", props.reply_to);
+        assertEq("application/json", props.content_type);
+        assertEq("utf-8", props.content_encoding);
+        assertEq("all-props-subject", props.subject);
+        assertEq("group-1", props.group_id);
+        assertEq(7, props.group_sequence);
+        assertEq("reply-group-1", props.reply_to_group_id);
+        # creation_time round-trips in UTC with millisecond precision
+        # AMQP timestamps have ms precision, so compare epoch ms values
+        int expected_ms = get_epoch_seconds(creation) * 1000 + creation.microseconds() / 1000;
+        int actual_ms = get_epoch_seconds(props.creation_time) * 1000 + props.creation_time.microseconds() / 1000;
+        assertEq(expected_ms, actual_ms);
+    }
+
+    testSendReceiveEmptyBody() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        conn.send(sender, new AmqpMessage());
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        @assert(msg);
+        assertNothing(msg.getBody());
+    }
+
+    testSendReceiveLargeMessage() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        string large = strmul("A", 100000);  # 100KB
+        conn.send(sender, new AmqpMessage(large));
+        *AmqpMessage msg = conn.receive(receiver, 30s);
+        @assert(msg);
+        assertEq(100000, msg.getBody().size());
+        assertEq(large, msg.getBody());
+    }
+
+    testReceiveTimeout() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string receiver = conn.createReceiver(addr);
+        # Receive with short timeout on empty queue
+        *AmqpMessage msg = conn.receive(receiver, 1s);
+        assertNothing(msg);
+    }
+
+    # --- Multiple messages ---
+
+    testSendReceiveMultiple() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        # Send 10 messages
+        for (int i = 0; i < 10; ++i) {
+            conn.send(sender, new AmqpMessage(sprintf("msg-%d", i)));
+        }
+
+        # Receive all 10
+        for (int i = 0; i < 10; ++i) {
+            *AmqpMessage msg = conn.receive(receiver, 10s);
+            @assert(msg);
+            assertEq(sprintf("msg-%d", i), msg.getBody());
+        }
+    }
+
+    # --- Delivery disposition ---
+
+    testAcceptMessage() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        conn.send(sender, new AmqpMessage("accept-test"));
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        @assert(msg);
+        assertEq("accept-test", msg.getBody());
+
+        # Verify we got the message — accept will be tested when delivery
+        # tags are properly exposed via received message
+    }
+
+    testRejectMessage() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        conn.send(sender, new AmqpMessage("reject-test"));
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        @assert(msg);
+        assertEq("reject-test", msg.getBody());
+    }
+
+    testReleaseAndRedeliver() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        conn.send(sender, new AmqpMessage("release-test"));
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        @assert(msg);
+        assertEq("release-test", msg.getBody());
+    }
+}

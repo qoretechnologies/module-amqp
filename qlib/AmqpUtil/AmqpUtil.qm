@@ -1,0 +1,182 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file AmqpUtil.qm Qore AMQP 1.0 utility module
+
+/*  AmqpUtil.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires amqp
+
+module AmqpUtil {
+    version = "1.0";
+    desc = "Qore AMQP 1.0 utility module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://github.com/qoretechnologies/module-amqp";
+    license = "MIT";
+}
+
+#! Main Amqp namespace
+/** All public declarations in the %AmqpUtil module are defined in this namespace.
+*/
+public namespace Amqp {
+}
+
+/** @mainpage AmqpUtil Module
+
+    @tableofcontents
+
+    @section amqputilintro AmqpUtil Module Introduction
+
+    The %AmqpUtil module provides a high-level pure-Qore API for AMQP 1.0 messaging
+    built on top of the \c amqp binary module (which wraps Apache Qpid Proton C++).
+
+    This module provides convenient wrapper classes for common messaging patterns:
+    - @ref Amqp::AmqpClient "AmqpClient": central client class for connection management,
+      sending, and receiving
+    - @ref Amqp::AmqpProducer "AmqpProducer": dedicated producer for a specific address
+    - @ref Amqp::AmqpConsumer "AmqpConsumer": dedicated consumer with durable subscription
+      and filter support
+    - @ref Amqp::AmqpRequestReply "AmqpRequestReply": request-reply pattern with automatic
+      correlation ID matching
+    - @ref Amqp::AmqpManagementClient "AmqpManagementClient": broker introspection via the
+      AMQP Management Protocol
+
+    For the data provider API integration (factory, connections, action catalog),
+    see the @ref amqpdataproviderintro "AmqpDataProvider module".
+
+    @section amqputil_client_usage Client Usage
+
+    @subsection amqputil_simple Simple Send/Receive
+
+    @code{.py}
+%modern
+%requires AmqpUtil
+
+AmqpClient client("amqp://guest:guest\@localhost:5672");
+client.connect();
+
+# Simple send
+client.send("my-queue", "Hello, AMQP!");
+
+# Simple receive
+*AmqpMessage msg = client.receive("my-queue", 5s);
+if (msg) {
+    printf("Received: %y\n", msg.getBody());
+}
+
+client.close();
+    @endcode
+
+    @subsection amqputil_producer_consumer Producer/Consumer Pattern
+
+    @code{.py}
+AmqpClient client("amqp://guest:guest\@localhost:5672");
+client.connect();
+
+AmqpProducer producer = client.createProducer("my-queue");
+producer.send("Message 1");
+producer.send("Message 2", <AmqpMessageProperties>{"content_type": "text/plain"});
+
+AmqpConsumer consumer = client.createConsumer("my-queue");
+while (*AmqpMessage msg = consumer.receive(5s)) {
+    printf("Got: %y\n", msg.getBody());
+}
+
+client.close();
+    @endcode
+
+    @subsection amqputil_requestreply Request-Reply Pattern
+
+    @code{.py}
+AmqpClient client("amqp://guest:guest\@localhost:5672");
+client.connect();
+
+AmqpRequestReply rr(client, "request-queue");
+AmqpMessage response = rr.request("ping", 10s);
+printf("Reply: %y\n", response.getBody());
+
+rr.close();
+client.close();
+    @endcode
+
+    @subsection amqputil_transactions Transactions
+
+    @code{.py}
+AmqpClient client("amqp://guest:guest\@localhost:5672");
+client.connect();
+
+client.beginTransaction();
+client.send("my-queue", "transacted message 1");
+client.send("my-queue", "transacted message 2");
+client.commitTransaction();
+
+client.close();
+    @endcode
+
+    @subsection amqputil_durable Durable Subscriptions
+
+    @code{.py}
+AmqpClient client("amqp://guest:guest\@localhost:5672");
+client.connect();
+
+AmqpConsumer consumer = client.createDurableConsumer("topic/news", "my-sub");
+*AmqpMessage msg = consumer.receive(5s);
+consumer.closeDurable();  # close without unsubscribing
+
+# Later, reconnect and resume
+consumer = client.createDurableConsumer("topic/news", "my-sub");
+# Messages accumulated while disconnected are available
+
+consumer.unsubscribe();  # permanently remove subscription
+client.close();
+    @endcode
+
+    @subsection amqputil_management Broker Introspection
+
+    @code{.py}
+AmqpClient client("amqp://guest:guest\@localhost:5672");
+client.connect();
+
+AmqpManagementClient mgmt = client.getManagementClient();
+list<hash<AmqpAddressInfo>> addresses = mgmt.queryAddresses();
+for (hash<AmqpAddressInfo> addr in addresses) {
+    printf("Address: %s (type: %s)\n", addr.name, addr.routing_type);
+}
+
+client.close();
+    @endcode
+
+    @section amqputilrelnotes Release Notes
+
+    @subsection amqputil_v1_0 AmqpUtil Module Version 1.0
+
+    - initial release
+    - @ref Amqp::AmqpClient "AmqpClient": high-level client with connect, send, receive,
+      transactions
+    - @ref Amqp::AmqpProducer "AmqpProducer": dedicated address producer
+    - @ref Amqp::AmqpConsumer "AmqpConsumer": dedicated consumer with durable subscriptions
+      and message filters
+    - @ref Amqp::AmqpRequestReply "AmqpRequestReply": request-reply pattern with correlation
+      ID matching and dynamic reply-to addresses
+    - @ref Amqp::AmqpManagementClient "AmqpManagementClient": broker introspection via
+      AMQP Management Protocol
+*/

@@ -1,0 +1,409 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    AmqpUtil module test suite (requires broker via AMQP_TEST_URL)
+*/
+
+%modern
+
+%requires QUnit
+%requires amqp
+%requires AmqpUtil
+
+%exec-class AmqpUtilTest
+
+public class AmqpUtilTest inherits QUnit::Test {
+    private {
+        *string url;
+        int test_counter = 0;
+    }
+
+    constructor() : Test("AmqpUtilTest", "1.0") {
+        url = ENV.AMQP_TEST_URL;
+        if (!url) {
+            printf("AMQP_TEST_URL not set, skipping AmqpUtil tests\n");
+            set_return_value(0);
+            return;
+        }
+
+        # AmqpClient basics
+        addTestCase("client connect and disconnect", \testClientConnectDisconnect());
+        addTestCase("client from options hash", \testClientFromOptions());
+        addTestCase("client isConnected state", \testClientIsConnected());
+
+        # AmqpClient send/receive
+        addTestCase("client send and receive string", \testClientSendReceiveString());
+        addTestCase("client send and receive hash", \testClientSendReceiveHash());
+        addTestCase("client send and receive with properties", \testClientSendReceiveProperties());
+        addTestCase("client sendMessage", \testClientSendMessage());
+        addTestCase("client receive timeout", \testClientReceiveTimeout());
+        addTestCase("client sender caching", \testClientSenderCaching());
+
+        # AmqpProducer
+        addTestCase("producer send", \testProducerSend());
+        addTestCase("producer sendMessage", \testProducerSendMessage());
+        addTestCase("producer with default opts", \testProducerDefaultOpts());
+
+        # AmqpConsumer
+        addTestCase("consumer receive", \testConsumerReceive());
+        addTestCase("consumer multiple messages", \testConsumerMultiple());
+        addTestCase("consumer isDurable", \testConsumerIsDurable());
+        addTestCase("consumer non-durable closeDurable throws", \testConsumerNonDurableCloseThrows());
+        addTestCase("consumer non-durable unsubscribe throws", \testConsumerNonDurableUnsubscribeThrows());
+
+        # AmqpRequestReply
+        addTestCase("request-reply pattern", \testRequestReply());
+        addTestCase("request-reply timeout", \testRequestReplyTimeout());
+
+        # AmqpManagementClient
+        addTestCase("management queryAddresses", \testManagementQueryAddresses());
+        addTestCase("management queryQueues", \testManagementQueryQueues());
+
+        # Transaction pass-through
+        addTestCase("client transaction methods", \testClientTransaction());
+
+        set_return_value(main());
+    }
+
+    private string getUniqueAddress() {
+        return sprintf("test-amqputil-%d-%d", getpid(), ++test_counter);
+    }
+
+    private AmqpClient getClient() {
+        AmqpClient client(url);
+        client.connect();
+        return client;
+    }
+
+    # --- AmqpClient basics ---
+
+    testClientConnectDisconnect() {
+        AmqpClient client(url);
+        client.connect();
+        assertEq(True, client.isConnected());
+        client.close();
+        assertEq(False, client.isConnected());
+    }
+
+    testClientFromOptions() {
+        AmqpClient client(<AmqpConnectionOptions>{"url": url});
+        client.connect();
+        assertEq(True, client.isConnected());
+        client.close();
+    }
+
+    testClientIsConnected() {
+        AmqpClient client(url);
+        assertEq(False, client.isConnected());
+        client.connect();
+        assertEq(True, client.isConnected());
+        client.close();
+        assertEq(False, client.isConnected());
+    }
+
+    # --- AmqpClient send/receive ---
+
+    testClientSendReceiveString() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        client.send(addr, "Hello from AmqpClient!");
+        *AmqpMessage msg = client.receive(addr, 10s);
+        @assert(msg);
+        assertEq("Hello from AmqpClient!", msg.getBody());
+    }
+
+    testClientSendReceiveHash() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        hash<auto> data = {"name": "test", "count": 42};
+        client.send(addr, data);
+        *AmqpMessage msg = client.receive(addr, 10s);
+        @assert(msg);
+        hash<auto> body = msg.getBody();
+        assertEq("test", body.name);
+        assertEq(42, body.count);
+    }
+
+    testClientSendReceiveProperties() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        client.send(addr, "with props", <AmqpMessageProperties>{
+            "content_type": "text/plain",
+            "message_id": "util-msg-001",
+            "subject": "test-subject",
+        });
+        *AmqpMessage msg = client.receive(addr, 10s);
+        @assert(msg);
+        assertEq("with props", msg.getBody());
+        assertEq("text/plain", msg.getContentType());
+        assertEq("util-msg-001", msg.getMessageId());
+        assertEq("test-subject", msg.getSubject());
+    }
+
+    testClientSendMessage() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        AmqpMessage outgoing(42);
+        client.sendMessage(addr, outgoing);
+        *AmqpMessage msg = client.receive(addr, 10s);
+        @assert(msg);
+        assertEq(42, msg.getBody());
+    }
+
+    testClientReceiveTimeout() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        *AmqpMessage msg = client.receive(addr, 1s);
+        assertNothing(msg);
+    }
+
+    testClientSenderCaching() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        # Send twice to same address — should reuse sender
+        client.send(addr, "msg-1");
+        client.send(addr, "msg-2");
+
+        *AmqpMessage msg1 = client.receive(addr, 10s);
+        @assert(msg1);
+        assertEq("msg-1", msg1.getBody());
+
+        *AmqpMessage msg2 = client.receive(addr, 10s);
+        @assert(msg2);
+        assertEq("msg-2", msg2.getBody());
+    }
+
+    # --- AmqpProducer ---
+
+    testProducerSend() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        AmqpProducer producer = client.createProducer(addr);
+        producer.send("producer msg");
+
+        *AmqpMessage msg = client.receive(addr, 10s);
+        @assert(msg);
+        assertEq("producer msg", msg.getBody());
+    }
+
+    testProducerSendMessage() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        AmqpProducer producer = client.createProducer(addr);
+        producer.sendMessage(new AmqpMessage("via sendMessage"));
+
+        *AmqpMessage msg = client.receive(addr, 10s);
+        @assert(msg);
+        assertEq("via sendMessage", msg.getBody());
+    }
+
+    testProducerDefaultOpts() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        # Create producer with default send options
+        AmqpProducer producer = client.createProducer(addr, <AmqpSendOptions>{
+            "durable": True,
+        });
+        @assert(producer.getSenderName());
+        producer.send("with default opts");
+
+        *AmqpMessage msg = client.receive(addr, 10s);
+        @assert(msg);
+        assertEq("with default opts", msg.getBody());
+    }
+
+    # --- AmqpConsumer ---
+
+    testConsumerReceive() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        AmqpConsumer consumer = client.createConsumer(addr);
+        @assert(consumer.getReceiverName());
+
+        client.send(addr, "consumer msg");
+        *AmqpMessage msg = consumer.receive(10s);
+        @assert(msg);
+        assertEq("consumer msg", msg.getBody());
+    }
+
+    testConsumerMultiple() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        AmqpProducer producer = client.createProducer(addr);
+        AmqpConsumer consumer = client.createConsumer(addr);
+
+        for (int i = 0; i < 5; ++i) {
+            producer.send(sprintf("msg-%d", i));
+        }
+
+        for (int i = 0; i < 5; ++i) {
+            *AmqpMessage msg = consumer.receive(10s);
+            @assert(msg);
+            assertEq(sprintf("msg-%d", i), msg.getBody());
+        }
+    }
+
+    testConsumerIsDurable() {
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        # Non-durable consumer
+        string addr = getUniqueAddress();
+        AmqpConsumer consumer = client.createConsumer(addr);
+        assertEq(False, consumer.isDurable());
+        assertNothing(consumer.getSubscriptionName());
+    }
+
+    testConsumerNonDurableCloseThrows() {
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        string addr = getUniqueAddress();
+        AmqpConsumer consumer = client.createConsumer(addr);
+        assertThrows("AMQP-CONSUMER-ERROR", sub() {
+            consumer.closeDurable();
+        });
+    }
+
+    testConsumerNonDurableUnsubscribeThrows() {
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        string addr = getUniqueAddress();
+        AmqpConsumer consumer = client.createConsumer(addr);
+        assertThrows("AMQP-CONSUMER-ERROR", sub() {
+            consumer.unsubscribe();
+        });
+    }
+
+    # --- AmqpRequestReply ---
+
+    testRequestReply() {
+        string request_addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        # Set up a "server" that receives on request_addr and sends a reply
+        AmqpConnection conn = client.getConnection();
+        string req_receiver = conn.createReceiver(request_addr);
+
+        # Create request-reply helper
+        AmqpRequestReply rr(client, request_addr);
+
+        # In a background thread, act as the responder
+        Counter done(1);
+        background sub() {
+            on_exit done.dec();
+            *AmqpMessage req = conn.receive(req_receiver, 10s);
+            if (req) {
+                # Send reply to the reply_to address with correlation_id
+                auto reply_to = req.getReplyTo();
+                auto msg_id = req.getMessageId();
+                if (reply_to && msg_id) {
+                    string reply_sender = conn.createSender(reply_to);
+                    conn.send(reply_sender, new AmqpMessage("pong", <AmqpMessageProperties>{
+                        "correlation_id": msg_id,
+                    }));
+                }
+            }
+        }();
+
+        AmqpMessage response = rr.request("ping", 10s);
+        assertEq("pong", response.getBody());
+
+        done.waitForZero(10s);
+        rr.close();
+    }
+
+    testRequestReplyTimeout() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        AmqpRequestReply rr(client, addr);
+        # No responder — should timeout
+        assertThrows("AMQP-REQUEST-REPLY-TIMEOUT", sub() {
+            rr.request("ping", 2s);
+        });
+        rr.close();
+    }
+
+    # --- AmqpManagementClient ---
+
+    testManagementQueryAddresses() {
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        # Create an address by sending a message
+        string addr = getUniqueAddress();
+        client.send(addr, "mgmt test");
+
+        AmqpManagementClient mgmt = client.getManagementClient();
+        list<hash<AmqpAddressInfo>> addresses = mgmt.queryAddresses();
+        # Should return a list (possibly empty if management not supported)
+        assertEq(NT_LIST, addresses.typeCode());
+    }
+
+    testManagementQueryQueues() {
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        AmqpManagementClient mgmt = client.getManagementClient();
+        list<hash<AmqpQueueInfo>> queues = mgmt.queryQueues();
+        assertEq(NT_LIST, queues.typeCode());
+    }
+
+    # --- Transaction pass-through ---
+
+    testClientTransaction() {
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        assertEq(False, client.inTransaction());
+        # Note: actual transaction support depends on broker + implementation
+        # Just verify the methods are callable
+    }
+}

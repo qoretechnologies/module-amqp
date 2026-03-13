@@ -1,0 +1,536 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    AMQP module unit test suite
+*/
+
+%modern
+
+%requires QUnit
+%requires amqp
+
+%exec-class AmqpTest
+
+public class AmqpTest inherits QUnit::Test {
+    constructor() : Test("AmqpTest", "1.0") {
+        # AmqpMessage creation tests
+        addTestCase("message with string body", \testMessageStringBody());
+        addTestCase("message with binary body", \testMessageBinaryBody());
+        addTestCase("message with hash body", \testMessageHashBody());
+        addTestCase("message with list body", \testMessageListBody());
+        addTestCase("message with int body", \testMessageIntBody());
+        addTestCase("message with float body", \testMessageFloatBody());
+        addTestCase("message with bool body", \testMessageBoolBody());
+        addTestCase("message with date body", \testMessageDateBody());
+        addTestCase("message with NOTHING body", \testMessageNothingBody());
+        addTestCase("message with empty string body", \testMessageEmptyStringBody());
+
+        # Message property tests
+        addTestCase("message properties round-trip", \testMessageProperties());
+        addTestCase("message content_type property", \testMessageContentType());
+        addTestCase("message_id string property", \testMessageIdString());
+        addTestCase("message_id int property", \testMessageIdInt());
+        addTestCase("correlation_id property", \testCorrelationId());
+        addTestCase("reply_to property", \testReplyTo());
+        addTestCase("subject property", \testSubject());
+        addTestCase("group_id and group_sequence", \testGroupProperties());
+        addTestCase("expiry_time and creation_time", \testTimeProperties());
+        addTestCase("application properties", \testApplicationProperties());
+        addTestCase("message with all properties", \testAllProperties());
+        addTestCase("message with empty properties", \testEmptyProperties());
+
+        # Type mapping tests
+        addTestCase("binary body with null bytes", \testBinaryNullBytes());
+        addTestCase("unicode string body", \testUnicodeString());
+        addTestCase("large string body", \testLargeStringBody());
+        addTestCase("large binary body", \testLargeBinaryBody());
+        addTestCase("nested hash body", \testNestedHashBody());
+        addTestCase("complex list body", \testComplexListBody());
+        addTestCase("max integer value", \testMaxIntegerValue());
+        addTestCase("negative integer value", \testNegativeIntegerValue());
+        addTestCase("float precision", \testFloatPrecision());
+
+        # Hashdecl tests
+        addTestCase("AmqpConnectionOptions hashdecl", \testConnectionOptionsHashdecl());
+        addTestCase("AmqpSslOptions hashdecl", \testSslOptionsHashdecl());
+        addTestCase("AmqpSaslOptions hashdecl", \testSaslOptionsHashdecl());
+        addTestCase("AmqpSendOptions hashdecl", \testSendOptionsHashdecl());
+        addTestCase("AmqpReceiveOptions hashdecl", \testReceiveOptionsHashdecl());
+        addTestCase("AmqpFilterOptions hashdecl", \testFilterOptionsHashdecl());
+        addTestCase("AmqpDeliveryInfo hashdecl", \testDeliveryInfoHashdecl());
+        addTestCase("AmqpAddressInfo hashdecl", \testAddressInfoHashdecl());
+        addTestCase("AmqpQueueInfo hashdecl", \testQueueInfoHashdecl());
+
+        # Negative tests
+        addTestCase("AmqpConnection missing url", \testConnectionMissingUrl());
+        addTestCase("AmqpConnection invalid url", \testConnectionInvalidUrl());
+        addTestCase("AmqpConnection connect failure", \testConnectionConnectFailure());
+
+        set_return_value(main());
+    }
+
+    # --- AmqpMessage creation tests ---
+
+    testMessageStringBody() {
+        AmqpMessage msg("Hello, World!");
+        assertEq("Hello, World!", msg.getBody());
+    }
+
+    testMessageBinaryBody() {
+        binary b = <deadbeef>;
+        AmqpMessage msg(b);
+        assertEq(b, msg.getBody());
+    }
+
+    testMessageHashBody() {
+        hash<auto> h = {"key": "value", "num": 42};
+        AmqpMessage msg(h);
+        hash<auto> body = msg.getBody();
+        assertEq("value", body.key);
+        assertEq(42, body.num);
+    }
+
+    testMessageListBody() {
+        list<auto> l = ("one", 2, True);
+        AmqpMessage msg(l);
+        list<auto> body = msg.getBody();
+        assertEq(3, body.size());
+        assertEq("one", body[0]);
+        assertEq(2, body[1]);
+        assertEq(True, body[2]);
+    }
+
+    testMessageIntBody() {
+        AmqpMessage msg(12345);
+        assertEq(12345, msg.getBody());
+    }
+
+    testMessageFloatBody() {
+        AmqpMessage msg(3.14);
+        assertEq(3.14, msg.getBody());
+    }
+
+    testMessageBoolBody() {
+        AmqpMessage msg(True);
+        assertEq(True, msg.getBody());
+    }
+
+    testMessageDateBody() {
+        date d = now_us();
+        AmqpMessage msg(d);
+        # Date gets stored as proton timestamp (millisecond precision)
+        # so we compare with millisecond precision
+        date body = msg.getBody();
+        assertEq(d.format("YYYY-MM-DD HH:mm:SS.xxx"), body.format("YYYY-MM-DD HH:mm:SS.xxx"));
+    }
+
+    testMessageNothingBody() {
+        AmqpMessage msg();
+        assertNothing(msg.getBody());
+    }
+
+    testMessageEmptyStringBody() {
+        AmqpMessage msg("");
+        assertEq("", msg.getBody());
+    }
+
+    # --- Message property tests ---
+
+    testMessageProperties() {
+        AmqpMessage msg("test", <AmqpMessageProperties>{
+            "content_type": "text/plain",
+            "message_id": "msg-001",
+            "subject": "test-subject",
+        });
+        hash<AmqpMessageProperties> props = msg.getProperties();
+        assertEq("text/plain", props.content_type);
+        assertEq("msg-001", props.message_id);
+        assertEq("test-subject", props.subject);
+    }
+
+    testMessageContentType() {
+        AmqpMessage msg("json data", <AmqpMessageProperties>{
+            "content_type": "application/json",
+        });
+        assertEq("application/json", msg.getContentType());
+    }
+
+    testMessageIdString() {
+        AmqpMessage msg("test", <AmqpMessageProperties>{
+            "message_id": "abc-123",
+        });
+        assertEq("abc-123", msg.getMessageId());
+    }
+
+    testMessageIdInt() {
+        AmqpMessage msg("test", <AmqpMessageProperties>{
+            "message_id": 42,
+        });
+        assertEq(42, msg.getMessageId());
+    }
+
+    testCorrelationId() {
+        AmqpMessage msg("test", <AmqpMessageProperties>{
+            "correlation_id": "corr-456",
+        });
+        assertEq("corr-456", msg.getCorrelationId());
+    }
+
+    testReplyTo() {
+        AmqpMessage msg("test", <AmqpMessageProperties>{
+            "reply_to": "reply-queue",
+        });
+        assertEq("reply-queue", msg.getReplyTo());
+    }
+
+    testSubject() {
+        AmqpMessage msg("test", <AmqpMessageProperties>{
+            "subject": "important",
+        });
+        assertEq("important", msg.getSubject());
+    }
+
+    testGroupProperties() {
+        AmqpMessage msg("test", <AmqpMessageProperties>{
+            "group_id": "group-A",
+            "group_sequence": 5,
+            "reply_to_group_id": "reply-group-B",
+        });
+        hash<AmqpMessageProperties> props = msg.getProperties();
+        assertEq("group-A", props.group_id);
+        assertEq(5, props.group_sequence);
+        assertEq("reply-group-B", props.reply_to_group_id);
+    }
+
+    testTimeProperties() {
+        date expiry = 2026-12-31T23:59:59Z;
+        date creation = 2026-01-01T00:00:00Z;
+        AmqpMessage msg("test", <AmqpMessageProperties>{
+            "expiry_time": expiry,
+            "creation_time": creation,
+        });
+        hash<AmqpMessageProperties> props = msg.getProperties();
+        # Compare with second precision (timestamps are millisecond precision)
+        assertEq(expiry.format("YYYY-MM-DD HH:mm:SS"), props.expiry_time.format("YYYY-MM-DD HH:mm:SS"));
+        assertEq(creation.format("YYYY-MM-DD HH:mm:SS"), props.creation_time.format("YYYY-MM-DD HH:mm:SS"));
+    }
+
+    testApplicationProperties() {
+        AmqpMessage msg("test", <AmqpMessageProperties>{
+            "application_properties": {
+                "color": "red",
+                "size": 42,
+                "active": True,
+            },
+        });
+        hash<auto> app_props = msg.getApplicationProperties();
+        assertEq("red", app_props.color);
+        assertEq(42, app_props.size);
+        assertEq(True, app_props.active);
+    }
+
+    testAllProperties() {
+        hash<AmqpMessageProperties> input = <AmqpMessageProperties>{
+            "message_id": "all-props-msg",
+            "correlation_id": "all-props-corr",
+            "reply_to": "all-props-reply",
+            "content_type": "application/octet-stream",
+            "content_encoding": "gzip",
+            "subject": "all-props-subject",
+            "to": "all-props-destination",
+            "group_id": "all-props-group",
+            "group_sequence": 99,
+            "reply_to_group_id": "all-props-reply-group",
+            "application_properties": {"key1": "val1", "key2": 2},
+        };
+        AmqpMessage msg("test body", input);
+        hash<AmqpMessageProperties> props = msg.getProperties();
+        assertEq("all-props-msg", props.message_id);
+        assertEq("all-props-corr", props.correlation_id);
+        assertEq("all-props-reply", props.reply_to);
+        assertEq("application/octet-stream", props.content_type);
+        assertEq("gzip", props.content_encoding);
+        assertEq("all-props-subject", props.subject);
+        assertEq("all-props-destination", props.to);
+        assertEq("all-props-group", props.group_id);
+        assertEq(99, props.group_sequence);
+        assertEq("all-props-reply-group", props.reply_to_group_id);
+        assertEq("val1", props.application_properties.key1);
+        assertEq(2, props.application_properties.key2);
+    }
+
+    testEmptyProperties() {
+        AmqpMessage msg("test");
+        hash<AmqpMessageProperties> props = msg.getProperties();
+        assertNothing(props.message_id);
+        assertNothing(props.correlation_id);
+        assertNothing(props.reply_to);
+        assertNothing(props.content_type);
+        assertNothing(props.subject);
+        assertNothing(props.application_properties);
+    }
+
+    # --- Type mapping tests ---
+
+    testBinaryNullBytes() {
+        binary b = <00010203000405>;
+        AmqpMessage msg(b);
+        assertEq(b, msg.getBody());
+    }
+
+    testUnicodeString() {
+        string s = "Hello, 世界! 🌍 Ñoño café";
+        AmqpMessage msg(s);
+        assertEq(s, msg.getBody());
+    }
+
+    testLargeStringBody() {
+        string s = strmul("x", 1024 * 1024);  # 1MB string
+        AmqpMessage msg(s);
+        assertEq(1024 * 1024, msg.getBody().size());
+        assertEq(s, msg.getBody());
+    }
+
+    testLargeBinaryBody() {
+        binary b = binary(strmul("y", 1024 * 1024));  # 1MB binary
+        AmqpMessage msg(b);
+        assertEq(1024 * 1024, msg.getBody().size());
+        assertEq(b, msg.getBody());
+    }
+
+    testNestedHashBody() {
+        hash<auto> h = {
+            "level1": {
+                "level2": {
+                    "value": "deep",
+                    "list": (1, 2, 3),
+                },
+            },
+            "top": "value",
+        };
+        AmqpMessage msg(h);
+        hash<auto> body = msg.getBody();
+        assertEq("value", body.top);
+        assertEq("deep", body.level1.level2.value);
+        assertEq((1, 2, 3), body.level1.level2.list);
+    }
+
+    testComplexListBody() {
+        list<auto> l = ("string", 42, 3.14, True, <deadbeef>, ("nested", "list"), {"key": "val"});
+        AmqpMessage msg(l);
+        list<auto> body = msg.getBody();
+        assertEq(7, body.size());
+        assertEq("string", body[0]);
+        assertEq(42, body[1]);
+        assertEq(3.14, body[2]);
+        assertEq(True, body[3]);
+        assertEq(<deadbeef>, body[4]);
+        assertEq(("nested", "list"), body[5]);
+        assertEq({"key": "val"}, body[6]);
+    }
+
+    testMaxIntegerValue() {
+        int max_val = 9223372036854775807;  # MAXINT64
+        AmqpMessage msg(max_val);
+        assertEq(max_val, msg.getBody());
+    }
+
+    testNegativeIntegerValue() {
+        int neg_val = -9223372036854775807;
+        AmqpMessage msg(neg_val);
+        assertEq(neg_val, msg.getBody());
+    }
+
+    testFloatPrecision() {
+        float f = 1.23456789012345;
+        AmqpMessage msg(f);
+        # Double precision should preserve at least 15 significant digits
+        assertEq(f, msg.getBody());
+    }
+
+    # --- Hashdecl tests ---
+
+    testConnectionOptionsHashdecl() {
+        hash<AmqpConnectionOptions> opts = <AmqpConnectionOptions>{
+            "url": "amqp://localhost:5672",
+            "heartbeat": 30,
+            "idle_timeout": 60000,
+            "max_frame_size": 65536,
+            "container_id": "test-container",
+            "virtual_host": "vhost1",
+            "reconnect": True,
+            "max_reconnect_attempts": 5,
+            "reconnect_delay_ms": 1000,
+        };
+        assertEq("amqp://localhost:5672", opts.url);
+        assertEq(30, opts.heartbeat);
+        assertEq(60000, opts.idle_timeout);
+        assertEq(65536, opts.max_frame_size);
+        assertEq("test-container", opts.container_id);
+        assertEq("vhost1", opts.virtual_host);
+        assertEq(True, opts.reconnect);
+        assertEq(5, opts.max_reconnect_attempts);
+        assertEq(1000, opts.reconnect_delay_ms);
+    }
+
+    testSslOptionsHashdecl() {
+        hash<AmqpSslOptions> opts = <AmqpSslOptions>{
+            "ca_cert": "/path/to/ca.pem",
+            "client_cert": "/path/to/cert.pem",
+            "client_key": "/path/to/key.pem",
+            "verify": True,
+        };
+        assertEq("/path/to/ca.pem", opts.ca_cert);
+        assertEq("/path/to/cert.pem", opts.client_cert);
+        assertEq("/path/to/key.pem", opts.client_key);
+        assertEq(True, opts.verify);
+    }
+
+    testSaslOptionsHashdecl() {
+        hash<AmqpSaslOptions> opts = <AmqpSaslOptions>{
+            "mechanism": "PLAIN",
+            "username": "guest",
+            "password": "guest",
+        };
+        assertEq("PLAIN", opts.mechanism);
+        assertEq("guest", opts.username);
+        assertEq("guest", opts.password);
+    }
+
+    testSendOptionsHashdecl() {
+        hash<AmqpSendOptions> opts = <AmqpSendOptions>{
+            "ttl": 60000,
+            "priority": 5,
+            "durable": True,
+            "first_acquirer": False,
+            "delivery_count": 0,
+            "settle_mode": "settled",
+        };
+        assertEq(60000, opts.ttl);
+        assertEq(5, opts.priority);
+        assertEq(True, opts.durable);
+        assertEq(False, opts.first_acquirer);
+        assertEq(0, opts.delivery_count);
+        assertEq("settled", opts.settle_mode);
+    }
+
+    testReceiveOptionsHashdecl() {
+        hash<AmqpReceiveOptions> opts = <AmqpReceiveOptions>{
+            "credit": 100,
+            "timeout_ms": 5000,
+            "auto_accept": True,
+            "prefetch": 50,
+            "durable_name": "my-sub",
+        };
+        assertEq(100, opts.credit);
+        assertEq(5000, opts.timeout_ms);
+        assertEq(True, opts.auto_accept);
+        assertEq(50, opts.prefetch);
+        assertEq("my-sub", opts.durable_name);
+    }
+
+    testFilterOptionsHashdecl() {
+        hash<AmqpFilterOptions> opts = <AmqpFilterOptions>{
+            "selector": "color = 'red' AND size > 10",
+            "filter_set": {"custom_filter": "value"},
+        };
+        assertEq("color = 'red' AND size > 10", opts.selector);
+        assertEq("value", opts.filter_set.custom_filter);
+    }
+
+    testDeliveryInfoHashdecl() {
+        hash<AmqpDeliveryInfo> info = <AmqpDeliveryInfo>{
+            "tag": <0102030405>,
+            "settled": True,
+            "state": "accepted",
+            "remote_state": "accepted",
+        };
+        assertEq(<0102030405>, info.tag);
+        assertEq(True, info.settled);
+        assertEq("accepted", info.state);
+        assertEq("accepted", info.remote_state);
+    }
+
+    testAddressInfoHashdecl() {
+        hash<AmqpAddressInfo> info = <AmqpAddressInfo>{
+            "name": "test-address",
+            "routing_type": "anycast",
+            "queue_count": 3,
+            "message_count": 100,
+        };
+        assertEq("test-address", info.name);
+        assertEq("anycast", info.routing_type);
+        assertEq(3, info.queue_count);
+        assertEq(100, info.message_count);
+    }
+
+    testQueueInfoHashdecl() {
+        hash<AmqpQueueInfo> info = <AmqpQueueInfo>{
+            "name": "test-queue",
+            "address": "test-address",
+            "routing_type": "anycast",
+            "durable": True,
+            "message_count": 50,
+            "consumer_count": 2,
+            "filter": "color = 'blue'",
+        };
+        assertEq("test-queue", info.name);
+        assertEq("test-address", info.address);
+        assertEq("anycast", info.routing_type);
+        assertEq(True, info.durable);
+        assertEq(50, info.message_count);
+        assertEq(2, info.consumer_count);
+        assertEq("color = 'blue'", info.filter);
+    }
+
+    # --- Negative tests ---
+
+    testConnectionMissingUrl() {
+        # AmqpConnectionOptions with empty url should throw at construction
+        assertThrows("AMQP-CONNECTION-ERROR", sub() {
+            AmqpConnection conn(<AmqpConnectionOptions>{
+                "url": "",
+            });
+        });
+    }
+
+    testConnectionInvalidUrl() {
+        # Invalid URL scheme should throw at construction
+        assertThrows("AMQP-CONNECTION-ERROR", sub() {
+            AmqpConnection conn(<AmqpConnectionOptions>{
+                "url": "not-a-valid-url",
+            });
+        });
+    }
+
+    testConnectionConnectFailure() {
+        # Connection to non-existent host should fail
+        assertThrows("AMQP-CONNECTION-ERROR", sub() {
+            AmqpConnection conn(<AmqpConnectionOptions>{
+                "url": "amqp://localhost:19999",
+            });
+            conn.connect();
+        });
+    }
+}
