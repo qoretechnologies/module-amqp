@@ -49,11 +49,15 @@ module AmqpDataProvider {
             "name": AmqpDataProvider::AppName,
             "display_name": "AMQP 1.0 Broker",
             "short_desc": "AMQP 1.0 message broker",
-            "desc": "Connect to AMQP 1.0 message brokers for sending and receiving "
-                "messages with support for message properties, delivery disposition, "
-                "and broker introspection",
+            "desc": "Provides integration with [AMQP 1.0](https://www.amqp.org/) "
+                "message brokers for sending and receiving messages.\n\n"
+                "**Supported operations**:\n"
+                "- **Send**: send messages to any AMQP address with full property support\n"
+                "- **Receive**: observe incoming messages as events\n"
+                "- **Discovery**: auto-discover broker addresses via the AMQP Management Protocol\n\n"
+                "Supports `amqp://` (plaintext) and `amqps://` (TLS) connection URLs.",
             "scheme": "amqp",
-            "groups": (DataProvider::AppGroup::ApiIntegration,),
+            "groups": (DataProvider::AppGroup::Messaging, DataProvider::AppGroup::ApiIntegration,),
             "logo": AmqpLogo,
             "logo_mime_type": MimeTypeSvg,
             "logo_file_name": "amqp-logo.svg",
@@ -74,8 +78,45 @@ module AmqpDataProvider {
             "action": "send",
             "display_name": "Send AMQP Message",
             "short_desc": "Send a message to an AMQP address",
-            "desc": "Sends a message to the specified AMQP address",
+            "desc": "Sends a message to the specified AMQP address with optional message "
+                "properties.\n\n"
+                "The message `body` can be any type (string, binary, hash, list, etc.). "
+                "Optional properties include `content_type`, `message_id`, `correlation_id`, "
+                "`reply_to`, `subject`, and `application_properties`.",
             "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AmqpSendRequestDataType::Fields{"body",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AmqpSendRequestDataType::Fields - "body", {
+                    "preselected": True,
+                },
+            ),
+            "output_type": AmqpAddressDataProvider::ResponseType,
+        });
+
+        # Register receive event action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AmqpDataProvider::AppName,
+            "path": "/{address}/events",
+            "path_vars": {
+                "address": <DataProviderPathVarInfo>{
+                    "display_name": "Address",
+                    "short_desc": "The AMQP address to receive from",
+                    "desc": "The AMQP address (queue or topic) to receive messages from",
+                    "example_value": "my-queue",
+                },
+            },
+            "action": "receive",
+            "display_name": "Receive AMQP Message",
+            "short_desc": "Receive messages from an AMQP address",
+            "desc": "Observes incoming messages on the specified AMQP address.\n\n"
+                "Each event contains the message `body`, `content_type`, `message_id`, "
+                "`correlation_id`, `reply_to`, `subject`, and `application_properties`.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_AMQP_MESSAGE,
         });
     };
 }

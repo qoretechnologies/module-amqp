@@ -50,52 +50,6 @@ public class AmqpEventDataProvider inherits AbstractDataProvider, DelayedObserva
             "type": "AmqpEventDataProvider",
             "supports_observable": True,
         };
-
-        #! Event fields
-        const EventFields = {
-            "body": {
-                "display_name": "Body",
-                "short_desc": "The message body",
-                "desc": "The received message body",
-                "type": AbstractDataProviderTypeMap."auto",
-            },
-            "content_type": {
-                "display_name": "Content Type",
-                "short_desc": "Message content type",
-                "desc": "The MIME content type of the message",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-            "message_id": {
-                "display_name": "Message ID",
-                "short_desc": "Message identifier",
-                "desc": "The message identifier",
-                "type": AbstractDataProviderTypeMap."auto",
-            },
-            "correlation_id": {
-                "display_name": "Correlation ID",
-                "short_desc": "Correlation identifier",
-                "desc": "The correlation identifier",
-                "type": AbstractDataProviderTypeMap."auto",
-            },
-            "reply_to": {
-                "display_name": "Reply To",
-                "short_desc": "Reply-to address",
-                "desc": "The reply-to address",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-            "subject": {
-                "display_name": "Subject",
-                "short_desc": "Message subject",
-                "desc": "The message subject",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-            "application_properties": {
-                "display_name": "Application Properties",
-                "short_desc": "Application-defined properties",
-                "desc": "Application-defined message properties",
-                "type": AbstractDataProviderTypeMap."*hash",
-            },
-        };
     }
 
     private {
@@ -141,8 +95,21 @@ public class AmqpEventDataProvider inherits AbstractDataProvider, DelayedObserva
         return {
             EVENT_AMQP_MESSAGE: <DataProviderMessageInfo>{
                 "desc": "Fired when a message is received on the AMQP address",
-                "type": new HashDataType("AmqpMessageEvent", EventFields),
+                "type": new AmqpMessageEventDataType(),
             },
+        };
+    }
+
+    #! Returns example event data
+    private auto getExampleEventDataImpl(string event_id) {
+        return {
+            "body": "Hello, AMQP!",
+            "content_type": "text/plain",
+            "message_id": "msg-001",
+            "correlation_id": NOTHING,
+            "reply_to": NOTHING,
+            "subject": "example",
+            "application_properties": {"source": "example"},
         };
     }
 

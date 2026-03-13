@@ -56,67 +56,11 @@ public class AmqpAddressDataProvider inherits AbstractDataProvider {
             "children_can_support_observers": True,
         };
 
-        #! Request fields
-        const RequestFields = {
-            "body": {
-                "display_name": "Body",
-                "short_desc": "The message body",
-                "desc": "The message body to send (string, binary, hash, list, int, etc.)",
-                "type": AbstractDataProviderTypeMap."auto",
-            },
-            "content_type": {
-                "display_name": "Content Type",
-                "short_desc": "Message content type",
-                "desc": "The MIME content type of the message body",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-            "message_id": {
-                "display_name": "Message ID",
-                "short_desc": "Message identifier",
-                "desc": "A unique identifier for the message",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-            "correlation_id": {
-                "display_name": "Correlation ID",
-                "short_desc": "Correlation identifier",
-                "desc": "An identifier used to correlate request/response messages",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-            "reply_to": {
-                "display_name": "Reply To",
-                "short_desc": "Reply-to address",
-                "desc": "The address to which replies should be sent",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-            "subject": {
-                "display_name": "Subject",
-                "short_desc": "Message subject",
-                "desc": "The subject of the message",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-            "application_properties": {
-                "display_name": "Application Properties",
-                "short_desc": "Application-defined properties",
-                "desc": "A hash of application-defined properties",
-                "type": AbstractDataProviderTypeMap."*hash",
-            },
-        };
+        #! Static request type for action registration
+        static AmqpSendRequestDataType RequestType();
 
-        #! Response fields
-        const ResponseFields = {
-            "settled": {
-                "display_name": "Settled",
-                "short_desc": "Whether the delivery was settled",
-                "desc": "True if the delivery was settled by the broker",
-                "type": AbstractDataProviderTypeMap."bool",
-            },
-            "state": {
-                "display_name": "State",
-                "short_desc": "Delivery state",
-                "desc": "The delivery state (e.g., 'accepted')",
-                "type": AbstractDataProviderTypeMap."string",
-            },
-        };
+        #! Static response type for action registration
+        static AmqpSendResponseDataType ResponseType();
     }
 
     private {
@@ -160,7 +104,7 @@ public class AmqpAddressDataProvider inherits AbstractDataProvider {
     #! Returns the request type
     private *AbstractDataProviderType getRequestTypeImpl() {
         if (!m_request_type) {
-            m_request_type = new HashDataType("AmqpSendRequest", RequestFields);
+            m_request_type = new AmqpSendRequestDataType();
         }
         return m_request_type;
     }
@@ -168,7 +112,7 @@ public class AmqpAddressDataProvider inherits AbstractDataProvider {
     #! Returns the response type
     private *AbstractDataProviderType getResponseTypeImpl() {
         if (!m_response_type) {
-            m_response_type = new HashDataType("AmqpSendResponse", ResponseFields);
+            m_response_type = new AmqpSendResponseDataType();
         }
         return m_response_type;
     }

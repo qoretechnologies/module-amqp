@@ -46,6 +46,10 @@ public class AmqpDataProviderTest inherits QUnit::Test {
         addTestCase("factory info", \testFactoryInfo());
         addTestCase("connection scheme registration", \testConnectionSchemeRegistration());
         addTestCase("provider info", \testProviderInfo());
+        addTestCase("request type fields", \testRequestTypeFields());
+        addTestCase("response type fields", \testResponseTypeFields());
+        addTestCase("event type fields", \testEventTypeFields());
+        addTestCase("example event data", \testExampleEventData());
 
         url = ENV.AMQP_TEST_URL;
         if (url) {
@@ -99,6 +103,59 @@ public class AmqpDataProviderTest inherits QUnit::Test {
         assertEq(True, info.supports_children);
         assertEq(True, info.children_can_support_apis);
         assertEq(True, info.children_can_support_observers);
+    }
+
+    testRequestTypeFields() {
+        AmqpSendRequestDataType req_type();
+        *hash<string, AbstractDataField> fields = req_type.getFields();
+        @assert(fields);
+        assertEq(True, fields.hasKey("body"));
+        assertEq(True, fields.hasKey("content_type"));
+        assertEq(True, fields.hasKey("message_id"));
+        assertEq(True, fields.hasKey("correlation_id"));
+        assertEq(True, fields.hasKey("reply_to"));
+        assertEq(True, fields.hasKey("subject"));
+        assertEq(True, fields.hasKey("application_properties"));
+
+        # Verify static Fields constant is accessible
+        assertEq(7, AmqpSendRequestDataType::Fields.size());
+    }
+
+    testResponseTypeFields() {
+        AmqpSendResponseDataType resp_type();
+        *hash<string, AbstractDataField> fields = resp_type.getFields();
+        @assert(fields);
+        assertEq(True, fields.hasKey("settled"));
+        assertEq(True, fields.hasKey("state"));
+
+        # Verify static Fields constant
+        assertEq(2, AmqpSendResponseDataType::Fields.size());
+    }
+
+    testEventTypeFields() {
+        AmqpMessageEventDataType evt_type();
+        *hash<string, AbstractDataField> fields = evt_type.getFields();
+        @assert(fields);
+        assertEq(True, fields.hasKey("body"));
+        assertEq(True, fields.hasKey("content_type"));
+        assertEq(True, fields.hasKey("message_id"));
+        assertEq(True, fields.hasKey("application_properties"));
+
+        # Verify static Fields constant
+        assertEq(7, AmqpMessageEventDataType::Fields.size());
+    }
+
+    testExampleEventData() {
+        # Create a minimal event provider to test getExampleEventData
+        Amqp::AmqpClient client("amqp://localhost:5672");
+        AmqpEventDataProvider evt_dp(client, "test-addr", 5000);
+        auto example = evt_dp.getExampleEventData(EVENT_AMQP_MESSAGE);
+        @assert(example);
+        assertEq("Hello, AMQP!", example.body);
+        assertEq("text/plain", example.content_type);
+        assertEq("msg-001", example.message_id);
+        assertEq("example", example.subject);
+        assertEq(True, example.application_properties.hasKey("source"));
     }
 
     # --- Integration tests ---
