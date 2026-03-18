@@ -45,10 +45,17 @@ endif()
 
 if(NOT PROTON_CPP_FOUND)
     # Manual fallback
+    # On macOS, check MacPorts (/opt/local) and Homebrew (/usr/local, /opt/homebrew) paths
+    set(_proton_search_paths /usr /usr/local)
+    if(APPLE)
+        list(APPEND _proton_search_paths /opt/local /opt/homebrew)
+    endif()
     find_path(PROTON_CPP_INCLUDE_DIRS proton/container.hpp
-        HINTS /usr/include /usr/local/include)
+        HINTS ${_proton_search_paths}
+        PATH_SUFFIXES include)
     find_library(PROTON_CPP_LIBRARIES NAMES qpid-proton-cpp
-        HINTS /usr/lib /usr/lib64 /usr/local/lib /usr/local/lib64)
+        HINTS ${_proton_search_paths}
+        PATH_SUFFIXES lib lib64)
     if(PROTON_CPP_INCLUDE_DIRS AND PROTON_CPP_LIBRARIES)
         set(PROTON_CPP_FOUND TRUE)
     endif()
@@ -61,6 +68,12 @@ endif()
 
 message(STATUS "Found Qpid Proton C++: ${PROTON_CPP_LIBRARIES}")
 message(STATUS "Proton C++ include dirs: ${PROTON_CPP_INCLUDE_DIRS}")
+
+# Ensure library directories from pkg-config are on the linker search path
+if(PROTON_CPP_LIBRARY_DIRS)
+    link_directories(${PROTON_CPP_LIBRARY_DIRS})
+    message(STATUS "Proton C++ library dirs: ${PROTON_CPP_LIBRARY_DIRS}")
+endif()
 
 # Check for C++17
 include(CheckCXXCompilerFlag)
