@@ -127,6 +127,9 @@ target_include_directories(${module_name} PRIVATE $<BUILD_INTERFACE:${CMAKE_CURR
 add_custom_target(QORE_INC_FILES DEPENDS ${QORE_INC_SRC})
 add_dependencies(${module_name} QORE_INC_FILES)
 
+if(PROTON_CPP_LIBRARY_DIRS)
+    target_link_directories(${module_name} PRIVATE ${PROTON_CPP_LIBRARY_DIRS})
+endif()
 target_link_libraries(${module_name} ${PROTON_CPP_LIBRARIES} ${QORE_LIBRARY})
 
 set(MODULE_DOX_INPUT ${CMAKE_CURRENT_BINARY_DIR}/mainpage.dox ${QPP_DOX})
