@@ -182,13 +182,17 @@ client.close();
     @subsection amqputil_v1_0 AmqpUtil Module Version 1.0
 
     - initial release
-    - @ref Amqp::AmqpClient "AmqpClient": high-level client with connect, send, receive,
-      transactions
-    - @ref Amqp::AmqpProducer "AmqpProducer": dedicated address producer
-    - @ref Amqp::AmqpConsumer "AmqpConsumer": dedicated consumer with durable subscriptions
-      and message filters
+    - @ref Amqp::AmqpClient "AmqpClient": high-level client with send, receive, batch send,
+      transactions, auto-convert, shared consumers, link close, statistics, connection events
+    - @ref Amqp::AmqpProducer "AmqpProducer": dedicated producer with batch send and close
+    - @ref Amqp::AmqpConsumer "AmqpConsumer": dedicated consumer with durable subscriptions,
+      message filters, DLQ routing via \c rejectToDlq(), and close
     - @ref Amqp::AmqpRequestReply "AmqpRequestReply": request-reply pattern with correlation
       ID matching and dynamic reply-to addresses
     - @ref Amqp::AmqpManagementClient "AmqpManagementClient": broker introspection via
       AMQP Management Protocol
+    - @ref Amqp::AmqpConnectionObservable "AmqpConnectionObservable": connection lifecycle
+      events via the Observer pattern (connected, disconnected, error, reconnected)
+    - @ref Amqp::AmqpMessageConverter "AmqpMessageConverter": automatic message body
+      serialization/deserialization for JSON, YAML, and XML
 */

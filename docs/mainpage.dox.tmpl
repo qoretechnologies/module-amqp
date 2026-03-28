@@ -502,6 +502,163 @@ try {
 client.close();
     @endcode
 
+    @subsection amqp_ex_batchsend Batch Send
+    @code{.py}
+%modern
+%requires amqp
+
+AmqpConnection conn(<AmqpConnectionOptions>{"url": "amqp://guest:guest@@localhost:5672"});
+conn.connect();
+
+string sender = conn.createSender("my-queue");
+list<AmqpMessage> batch = map new AmqpMessage(sprintf("msg-%d", $1)), xrange(100);
+list<hash<AmqpDeliveryInfo>> results = conn.sendBatch(sender, batch);
+printf("Sent %d messages\\n", results.size());
+
+conn.close();
+    @endcode
+
+    @subsection amqp_ex_shared Shared Subscriptions
+    @code{.py}
+%modern
+%requires AmqpUtil
+
+Amqp::AmqpClient client("amqp://guest:guest@@localhost:5672");
+client.connect();
+
+# Two consumers share the load from the same topic
+Amqp::AmqpConsumer c1 = client.createSharedConsumer("topic/orders", "order-workers");
+Amqp::AmqpConsumer c2 = client.createSharedConsumer("topic/orders", "order-workers");
+
+# Messages are distributed between c1 and c2
+*AmqpMessage msg = c1.receive(5s);
+
+client.close();
+    @endcode
+
+    @subsection amqp_ex_stats Connection Statistics
+    @code{.py}
+%modern
+%requires amqp
+
+AmqpConnection conn(<AmqpConnectionOptions>{"url": "amqp://guest:guest@@localhost:5672"});
+conn.connect();
+# ... send/receive messages ...
+
+hash<AmqpConnectionStats> stats = conn.getStatistics();
+printf("Sent: %d msgs (%d bytes), Received: %d msgs, Links: %d, Connected since: %y\\n",
+    stats.messages_sent, stats.bytes_sent, stats.messages_received,
+    stats.link_count, stats.connected_since);
+    @endcode
+
+    @subsection amqp_ex_linkclose Graceful Link Close
+    @code{.py}
+%modern
+%requires amqp
+
+AmqpConnection conn(<AmqpConnectionOptions>{"url": "amqp://guest:guest@@localhost:5672"});
+conn.connect();
+
+string sender = conn.createSender("my-queue");
+conn.send(sender, new AmqpMessage("Hello!"));
+conn.closeSender(sender);  # close the link without closing the connection
+
+string receiver = conn.createReceiver("my-queue");
+conn.closeReceiver(receiver);  # close the receiver link
+
+conn.close();
+    @endcode
+
+    @subsection amqp_ex_events Connection Events
+    @code{.py}
+%modern
+%requires amqp
+
+AmqpConnection conn(<AmqpConnectionOptions>{"url": "amqp://guest:guest@@localhost:5672"});
+conn.connect();
+
+# Poll for lifecycle events
+list<hash<auto>> events = conn.getConnectionEvents();
+# events: ({"event": "amqp-connected", "timestamp": 2026-03-28T...}, ...)
+# Event types: "amqp-connected", "amqp-disconnected", "amqp-error", "amqp-reconnected"
+    @endcode
+
+    @subsection amqp_ex_reconnect Reconnection with Link Recovery
+
+    When \c reconnect is enabled in connection options and \c auto_recover_links is
+    \c True (the default), all senders and receivers are automatically re-created
+    when the connection is re-established after a disconnect.
+
+    @code{.py}
+AmqpConnection conn(<AmqpConnectionOptions>{
+    "url": "amqp://guest:guest@@localhost:5672",
+    "reconnect": True,
+});
+conn.connect();
+string sender = conn.createSender("my-queue");
+# If the connection drops and reconnects, sender is automatically re-created
+
+conn.setAutoRecoverLinks(False);  # disable auto-recovery if needed
+    @endcode
+
+    @subsection amqp_ex_converter Message Content Converter
+    @code{.py}
+%modern
+%requires AmqpUtil
+
+Amqp::AmqpClient client("amqp://guest:guest@@localhost:5672");
+client.connect();
+client.setAutoConvert(True);
+
+# Auto-encode: hash is serialized as JSON before sending
+client.send("my-queue", {"order_id": 123, "total": 49.99},
+    <AmqpMessageProperties>{"content_type": "application/json"});
+
+# Auto-decode: receiveAndDecode parses the JSON body back to a hash
+*hash<auto> result = client.receiveAndDecode("my-queue", 5s);
+printf("Order: %y\\n", result.body);  # {"order_id": 123, "total": 49.99}
+
+# Supported: application/json, application/yaml, text/yaml, application/xml, text/xml
+# Requires the corresponding module (json, yaml, xml) to be installed
+    @endcode
+
+    @subsection amqp_ex_dlq Dead Letter Queue Routing
+    @code{.py}
+%modern
+%requires AmqpUtil
+
+Amqp::AmqpClient client("amqp://guest:guest@@localhost:5672");
+client.connect();
+
+# Create a consumer with a DLQ address
+Amqp::AmqpConsumer consumer = client.createConsumer("orders", NOTHING, NOTHING, "orders-dlq");
+
+*AmqpMessage msg = consumer.receive(5s);
+if (msg) {
+    try {
+        processOrder(msg.getBody());
+        consumer.accept(msg.getDeliveryTag());
+    } catch () {
+        # Forward to DLQ with rejection metadata, then reject original
+        consumer.rejectToDlq(msg.getDeliveryTag(), msg, "processing failed");
+    }
+}
+    @endcode
+
+    @subsection amqp_ex_urlcreds URL Credential Extraction
+
+    Credentials in the AMQP URL (\c amqp://user:pass@@host) are automatically
+    extracted and used for SASL authentication. Explicit \c sasl options in
+    @ref AmqpConnectionOptions override URL credentials.
+
+    @code{.py}
+# Credentials from URL — no separate sasl options needed
+AmqpConnection conn(<AmqpConnectionOptions>{
+    "url": "amqp://myuser:mypassword@@broker.example.com:5672",
+});
+conn.connect();  # authenticates as myuser
+    @endcode
+
     @section amqp_connection_options Connection Options Reference
 
     | Option | Type | Default | Description |
@@ -533,6 +690,7 @@ client.close();
     | \c AMQP-DECODE-ERROR | receive() | Message body/map/list decode failure |
     | \c AMQP-ENCODE-ERROR | send() | Message body/map/list encode failure |
     | \c AMQP-REQUEST-REPLY-TIMEOUT | AmqpRequestReply::request() | No correlated response within timeout |
+    | \c AMQP-CONVERTER-ERROR | AmqpMessageConverter | Required serialization module not available |
 
     @section amqprelnotes Release Notes
 
@@ -540,15 +698,24 @@ client.close();
     - initial release
     - @ref Qore::Amqp::AmqpConnection "AmqpConnection" class for AMQP 1.0 messaging
     - @ref Qore::Amqp::AmqpMessage "AmqpMessage" class with full type mapping and delivery tag support
-    - TLS/SSL and SASL authentication
+    - TLS/SSL and SASL authentication with URL credential extraction
     - Delivery disposition: accept, reject, release, modify
     - Durable subscriptions with close/unsubscribe lifecycle
     - JMS-style message selectors via @ref Qore::Amqp::AmqpFilterOptions "AmqpFilterOptions"
-    - Transaction support (begin, commit, rollback)
-    - AMQP Management Protocol support for broker introspection
+    - Transacted message delivery: begin/commit/rollback with TransactionalState on TRANSFER frames
+    - AMQP Management Protocol for broker introspection (addresses, queues)
+    - Batch send via \c sendBatch() for efficient bulk publishing
+    - Shared subscriptions via source capabilities (\c shared, \c global)
+    - Connection statistics: message/byte counts, link count, uptime
+    - Graceful link close: \c closeSender(), \c closeReceiver()
+    - Connection lifecycle events: connected, disconnected, error, reconnected
+    - Automatic link recovery on reconnection (\c setAutoRecoverLinks())
     - @ref Amqp::AmqpClient "AmqpClient" high-level API with cached sender/receiver links
     - @ref Amqp::AmqpProducer "AmqpProducer" and @ref Amqp::AmqpConsumer "AmqpConsumer" for dedicated messaging
     - @ref Amqp::AmqpRequestReply "AmqpRequestReply" for request-reply pattern with auto-correlation
     - @ref Amqp::AmqpManagementClient "AmqpManagementClient" for broker introspection
+    - @ref Amqp::AmqpConnectionObservable "AmqpConnectionObservable" for connection event Observer pattern
+    - @ref Amqp::AmqpMessageConverter "AmqpMessageConverter" for auto-encode/decode (JSON, YAML, XML)
+    - Dead letter queue routing via @ref Amqp::AmqpConsumer::rejectToDlq() "rejectToDlq()"
     - @ref AmqpDataProvider "AmqpDataProvider" module with factory, connection schemes, and observable events
 */
