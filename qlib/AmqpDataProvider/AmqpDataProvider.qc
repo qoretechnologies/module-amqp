@@ -61,47 +61,76 @@ public class AmqpDataProvider inherits AbstractDataProvider {
         #! Constructor options
         const ConstructorOptions = {
             "url": <DataProviderOptionInfo>{
-                "display_name": "URL",
-                "short_desc": "The AMQP broker URL",
+                "display_name": "Broker URL",
+                "short_desc": "AMQP broker connection URL",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "The URL of the AMQP broker (e.g., "
-                    "`amqp://guest:guest@localhost:5672` or `amqps://...`)",
+                "desc": "The URL of the AMQP 1.0 message broker.\n\n"
+                    "Use `amqp://` for plaintext connections or `amqps://` for "
+                    "TLS-encrypted connections. Credentials can be included in the URL "
+                    "(e.g., `amqp://user:pass@host:5672`) or provided separately via "
+                    "the **Username** and **Password** options.",
                 "required": True,
+                "example_value": "amqp://guest:guest@localhost:5672",
             },
             "addresses": <DataProviderOptionInfo>{
                 "display_name": "Addresses",
-                "short_desc": "Comma-separated list of AMQP addresses",
+                "short_desc": "AMQP addresses to expose",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "Comma-separated list of AMQP addresses (queues/topics) to expose "
-                    "as child providers",
+                "desc": "Comma-separated list of AMQP addresses (queues or topics) to "
+                    "expose as child data providers.\n\n"
+                    "Each address becomes a child provider that supports sending "
+                    "messages via `doRequest()` and receiving via observable events.",
+                "example_value": "orders,notifications,audit-log",
             },
             "use_management": <DataProviderOptionInfo>{
-                "display_name": "Use Management",
-                "short_desc": "Auto-discover addresses via AMQP Management Protocol",
+                "display_name": "Auto-Discover Addresses",
+                "short_desc": "Query the broker for available addresses",
                 "type": AbstractDataProviderType::get(SoftBoolType),
-                "desc": "If `True`, queries the broker via the AMQP Management Protocol "
-                    "to auto-discover available addresses",
+                "desc": "When enabled, queries the broker via the AMQP Management Protocol "
+                    "to automatically discover available addresses.\n\n"
+                    "This is useful when you want to expose all broker addresses without "
+                    "listing them manually. **Note:** not all brokers support the "
+                    "management protocol.",
                 "default_value": False,
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Disabled",
+                        "short_desc": "Use manually configured addresses only",
+                        "value": False,
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Enabled",
+                        "short_desc": "Auto-discover addresses from the broker",
+                        "value": True,
+                    },
+                ),
             },
             "username": <DataProviderOptionInfo>{
                 "display_name": "Username",
-                "short_desc": "SASL username",
+                "short_desc": "Authentication username",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "Username for SASL authentication",
+                "desc": "Username for SASL PLAIN authentication with the broker.\n\n"
+                    "If credentials are included in the URL, this option is not needed. "
+                    "If both are provided, this option takes precedence.",
+                "example_value": "guest",
             },
             "password": <DataProviderOptionInfo>{
                 "display_name": "Password",
-                "short_desc": "SASL password",
+                "short_desc": "Authentication password",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "Password for SASL authentication",
+                "desc": "Password for SASL PLAIN authentication with the broker.",
                 "sensitive": True,
             },
             "timeout_ms": <DataProviderOptionInfo>{
-                "display_name": "Timeout",
-                "short_desc": "Default timeout in milliseconds",
+                "display_name": "Operation Timeout",
+                "short_desc": "Timeout for AMQP operations in milliseconds",
                 "type": AbstractDataProviderType::get(SoftIntType),
-                "desc": "Default timeout for AMQP operations in milliseconds",
+                "desc": "The maximum time in milliseconds to wait for AMQP operations "
+                    "such as sending messages or receiving responses.\n\n"
+                    "Increase this value for high-latency networks or brokers under "
+                    "heavy load.",
                 "default_value": 30000,
+                "example_value": 30000,
             },
         };
     }

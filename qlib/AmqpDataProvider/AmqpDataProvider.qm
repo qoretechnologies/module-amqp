@@ -47,15 +47,22 @@ module AmqpDataProvider {
         # Register app in action catalog
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": AmqpDataProvider::AppName,
-            "display_name": "AMQP 1.0 Broker",
-            "short_desc": "AMQP 1.0 message broker",
-            "desc": "Provides integration with [AMQP 1.0](https://www.amqp.org/) "
-                "message brokers for sending and receiving messages.\n\n"
+            "display_name": "AMQP 1.0 Message Broker",
+            "short_desc": "Send and receive messages via AMQP 1.0",
+            "desc": "Connect to any [AMQP 1.0](https://www.amqp.org/) message broker "
+                "(Apache ActiveMQ Artemis, RabbitMQ, Azure Service Bus, Amazon MQ, etc.) "
+                "to integrate messaging into your workflows.\n\n"
+                "**Use cases**:\n"
+                "- **Order processing**: send order events to a queue for async processing\n"
+                "- **Notifications**: publish alerts and notifications to topic subscribers\n"
+                "- **System integration**: exchange data between microservices via message queues\n"
+                "- **Event-driven workflows**: trigger actions when messages arrive\n\n"
                 "**Supported operations**:\n"
-                "- **Send**: send messages to any AMQP address with full property support\n"
-                "- **Receive**: observe incoming messages as events\n"
-                "- **Discovery**: auto-discover broker addresses via the AMQP Management Protocol\n\n"
-                "Supports `amqp://` (plaintext) and `amqps://` (TLS) connection URLs.",
+                "- **Send**: publish messages to any address with full property support\n"
+                "- **Receive**: observe incoming messages as real-time events\n"
+                "- **Auto-discovery**: automatically discover broker addresses via the "
+                "AMQP Management Protocol\n\n"
+                "Supports both `amqp://` (plaintext) and `amqps://` (TLS-encrypted) connections.",
             "scheme": "amqp",
             "groups": (DataProvider::AppGroup::Messaging, DataProvider::AppGroup::ApiIntegration,),
             "logo": AmqpLogo,
@@ -69,20 +76,31 @@ module AmqpDataProvider {
             "path": "/{address}",
             "path_vars": {
                 "address": <DataProviderPathVarInfo>{
-                    "display_name": "Address",
-                    "short_desc": "The AMQP address to send to",
-                    "desc": "The AMQP address (queue or topic) to send messages to",
-                    "example_value": "my-queue",
+                    "display_name": "AMQP Address",
+                    "short_desc": "The queue or topic to send to",
+                    "desc": "The AMQP address (queue or topic name) where the message "
+                        "will be published.\n\n"
+                        "Messages sent to a **queue** are delivered to a single consumer "
+                        "(point-to-point). Messages sent to a **topic** are delivered to "
+                        "all subscribers (publish-subscribe).",
+                    "example_value": "orders",
                 },
             },
             "action": "send",
-            "display_name": "Send AMQP Message",
-            "short_desc": "Send a message to an AMQP address",
-            "desc": "Sends a message to the specified AMQP address with optional message "
-                "properties.\n\n"
-                "The message `body` can be any type (string, binary, hash, list, etc.). "
-                "Optional properties include `content_type`, `message_id`, `correlation_id`, "
-                "`reply_to`, `subject`, and `application_properties`.",
+            "display_name": "Send Message",
+            "short_desc": "Publish a message to an AMQP queue or topic",
+            "desc": "Sends a message to the specified AMQP address (queue or topic).\n\n"
+                "The message **body** is required and can be any type — a string, "
+                "structured data (hash/list), binary, or scalar value. Use "
+                "`content_type` to indicate the format (e.g., `application/json`).\n\n"
+                "**Common scenarios**:\n"
+                "- Send an order event: `{\"order_id\": 123, \"total\": 49.99}` with "
+                "`content_type: application/json`\n"
+                "- Send a notification: `\"Low inventory alert\"` with "
+                "`subject: alerts.inventory`\n"
+                "- Send a binary payload: raw file data with "
+                "`content_type: application/octet-stream`\n\n"
+                "The response indicates whether the broker **accepted** the message.",
             "action_code": DPAT_API,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AmqpSendRequestDataType::Fields{"body",}, {
@@ -103,18 +121,27 @@ module AmqpDataProvider {
             "path": "/{address}/events",
             "path_vars": {
                 "address": <DataProviderPathVarInfo>{
-                    "display_name": "Address",
-                    "short_desc": "The AMQP address to receive from",
-                    "desc": "The AMQP address (queue or topic) to receive messages from",
-                    "example_value": "my-queue",
+                    "display_name": "AMQP Address",
+                    "short_desc": "The queue or topic to receive from",
+                    "desc": "The AMQP address (queue or topic name) to listen on for "
+                        "incoming messages.\n\n"
+                        "Messages are delivered as events whenever they arrive on "
+                        "this address.",
+                    "example_value": "orders",
                 },
             },
             "action": "receive",
-            "display_name": "Receive AMQP Message",
-            "short_desc": "Receive messages from an AMQP address",
-            "desc": "Observes incoming messages on the specified AMQP address.\n\n"
-                "Each event contains the message `body`, `content_type`, `message_id`, "
-                "`correlation_id`, `reply_to`, `subject`, and `application_properties`.",
+            "display_name": "Receive Messages",
+            "short_desc": "Listen for incoming messages on an AMQP address",
+            "desc": "Observes incoming messages on the specified AMQP address and fires "
+                "an event for each message received.\n\n"
+                "Each event includes the message `body`, `content_type`, `message_id`, "
+                "`correlation_id`, `reply_to`, `subject`, and any custom "
+                "`application_properties` set by the sender.\n\n"
+                "**Use this to**:\n"
+                "- Process orders as they arrive on a queue\n"
+                "- React to notifications from a topic\n"
+                "- Trigger workflows when integration messages are received",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_AMQP_MESSAGE,
         });

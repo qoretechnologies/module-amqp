@@ -34,7 +34,11 @@ public class AmqpDataProviderFactory inherits AbstractDataProviderFactory {
         #! Factory info
         const FactoryInfo = <DataProviderFactoryInfo>{
             "name": "amqp",
-            "desc": "AMQP 1.0 data provider factory",
+            "desc": "Creates AMQP 1.0 data providers for sending and receiving messages "
+                "via message broker queues and topics.\n\n"
+                "Each AMQP address is exposed as a child provider that supports "
+                "sending messages (via API actions) and receiving messages (via "
+                "observable events).",
             "children_can_support_apis": True,
             "children_can_support_observers": True,
         };

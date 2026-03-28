@@ -33,11 +33,13 @@ public class AmqpDataProviderConnection inherits ConnectionProvider::AbstractCon
     public {
         #! Connection scheme info
         const ConnectionScheme = <ConnectionSchemeInfo>{
-            "display_name": "AMQP Connection",
-            "short_desc": "A connection to an AMQP 1.0 message broker",
-            "desc": "A connection to an AMQP 1.0 message broker for sending and "
-                "receiving messages with support for message properties, delivery "
-                "disposition, and broker introspection",
+            "display_name": "AMQP 1.0 Connection",
+            "short_desc": "Connect to an AMQP 1.0 message broker",
+            "desc": "Establishes a connection to an AMQP 1.0 message broker for "
+                "sending and receiving messages.\n\n"
+                "Supports plaintext (`amqp://`) and TLS-encrypted (`amqps://`) "
+                "connections with SASL authentication (credentials in the URL or "
+                "configured separately).",
             "cls": Class::forName("AmqpDataProvider::AmqpDataProviderConnection"),
             "schemes": {
                 "amqp": True,
@@ -50,25 +52,42 @@ public class AmqpDataProviderConnection inherits ConnectionProvider::AbstractCon
             "options": {
                 "addresses": <ConnectionOptionInfo>{
                     "display_name": "Addresses",
-                    "short_desc": "Comma-separated list of AMQP addresses",
+                    "short_desc": "AMQP addresses to expose as providers",
                     "type": "string",
-                    "desc": "Comma-separated list of AMQP addresses to expose as "
-                        "child providers",
+                    "desc": "Comma-separated list of AMQP addresses (queues or topics) "
+                        "to expose as child data providers.\n\n"
+                        "Each address supports sending messages and receiving events.",
+                    "example_value": "orders,notifications",
                 },
                 "use_management": <ConnectionOptionInfo>{
-                    "display_name": "Use Management",
-                    "short_desc": "Auto-discover addresses via AMQP Management Protocol",
+                    "display_name": "Auto-Discover Addresses",
+                    "short_desc": "Query the broker for available addresses",
                     "type": "bool",
-                    "desc": "If `True`, queries the broker to auto-discover available "
-                        "addresses",
+                    "desc": "When enabled, queries the broker via the AMQP Management "
+                        "Protocol to automatically discover available addresses.\n\n"
+                        "**Note:** not all brokers support this protocol.",
                     "default_value": False,
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "display_name": "Disabled",
+                            "short_desc": "Use manually configured addresses only",
+                            "value": False,
+                        },
+                        <AllowedValueInfo>{
+                            "display_name": "Enabled",
+                            "short_desc": "Auto-discover addresses from the broker",
+                            "value": True,
+                        },
+                    ),
                 },
                 "timeout_ms": <ConnectionOptionInfo>{
-                    "display_name": "Timeout",
-                    "short_desc": "Default timeout in milliseconds",
+                    "display_name": "Operation Timeout",
+                    "short_desc": "Timeout for AMQP operations in milliseconds",
                     "type": "int",
-                    "desc": "Default timeout for AMQP operations in milliseconds",
+                    "desc": "Maximum time in milliseconds to wait for AMQP operations.\n\n"
+                        "Increase for high-latency networks or heavily loaded brokers.",
                     "default_value": 30000,
+                    "example_value": 30000,
                 },
             },
         };
