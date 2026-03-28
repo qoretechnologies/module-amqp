@@ -53,6 +53,9 @@ public class AmqpClient {
 
         #! Cached receiver link names by address
         hash<string, string> m_receivers;
+
+        #! Auto-convert message bodies based on content_type
+        bool m_auto_convert = False;
     }
 
     #! Create a new AMQP client from a URL string
@@ -125,6 +128,17 @@ public class AmqpClient {
         }
     }
 
+    #! Enables or disables automatic message body conversion based on content_type
+    /** When enabled, send() auto-encodes the body if content_type is set
+        (e.g., JSON, YAML, XML), and receive() auto-decodes based on the
+        received content_type.
+
+        @param enable True to enable, False to disable (default: False)
+    */
+    setAutoConvert(bool enable) {
+        m_auto_convert = enable;
+    }
+
     #! Returns connection statistics
     /** @return connection statistics hash
 
@@ -171,6 +185,10 @@ public class AmqpClient {
     */
     hash<AmqpDeliveryInfo> send(string address, auto body,
             *hash<AmqpMessageProperties> properties, *hash<AmqpSendOptions> opts) {
+        # Auto-encode body if content_type is set and auto_convert is enabled
+        if (m_auto_convert && properties.content_type) {
+            body = AmqpMessageConverter::encode(body, properties.content_type);
+        }
         string sender = getOrCreateSender(address);
         return m_conn.send(sender, new AmqpMessage(body, properties), opts);
     }
@@ -202,7 +220,33 @@ public class AmqpClient {
     */
     *AmqpMessage receive(string address, timeout timeout) {
         string receiver = getOrCreateReceiver(address);
-        return m_conn.receive(receiver, timeout);
+        *AmqpMessage msg = m_conn.receive(receiver, timeout);
+        return msg;
+    }
+
+    #! Receive and auto-decode the message body based on content_type
+    /** Convenience method that receives a message and decodes the body if
+        the content_type indicates a known format (JSON, YAML, XML).
+
+        @param address the AMQP address to receive from
+        @param timeout the maximum time to wait
+
+        @return a hash with \c body (decoded), \c msg (original AmqpMessage),
+                or NOTHING on timeout
+    */
+    *hash<auto> receiveAndDecode(string address, timeout timeout) {
+        *AmqpMessage msg = receive(address, timeout);
+        if (!msg) {
+            return NOTHING;
+        }
+        auto body = msg.getBody();
+        if (m_auto_convert) {
+            body = AmqpMessageConverter::decode(body, msg.getContentType());
+        }
+        return {
+            "body": body,
+            "msg": msg,
+        };
     }
 
     #! Accept a delivered message
@@ -269,12 +313,13 @@ public class AmqpClient {
     /** @param address the AMQP address to consume from
         @param opts optional receiver options
         @param filter optional filter options
+        @param dlq_address optional dead letter queue address for rejectToDlq()
 
         @return a new AmqpConsumer
 
     */
     AmqpConsumer createConsumer(string address, *hash<AmqpReceiveOptions> opts,
-            *hash<AmqpFilterOptions> filter) {
+            *hash<AmqpFilterOptions> filter, *string dlq_address) {
         string receiver;
         if (filter) {
             # Filtered receivers need their own links (can't reuse cached)
@@ -282,7 +327,7 @@ public class AmqpClient {
         } else {
             receiver = getOrCreateReceiver(address, opts);
         }
-        return new AmqpConsumer(m_conn, receiver);
+        return new AmqpConsumer(m_conn, receiver, NOTHING, dlq_address);
     }
 
     #! Create a shared consumer for a specific address

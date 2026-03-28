@@ -29,6 +29,7 @@
 
 %requires QUnit
 %requires amqp
+%requires AmqpUtil
 
 %exec-class AmqpIntegrationTest
 
@@ -103,6 +104,12 @@ public class AmqpIntegrationTest inherits QUnit::Test {
 
         # Shared subscriptions
         addTestCase("shared subscription option", \testSharedSubscription());
+
+        # Message converter (requires json module)
+        addTestCase("auto-convert JSON round-trip", \testAutoConvertJson());
+
+        # DLQ routing
+        addTestCase("reject to DLQ", \testRejectToDlq());
 
         # Connection events
         addTestCase("connected event on connect", \testConnectedEvent());
@@ -723,6 +730,65 @@ public class AmqpIntegrationTest inherits QUnit::Test {
         });
         @assert(receiver);
         conn.closeReceiver(receiver);
+    }
+
+    # --- Message converter ---
+
+    testAutoConvertJson() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        # Send a JSON-encoded message
+        hash<auto> data = {"key": "value", "num": 42};
+        conn.send(sender, new AmqpMessage(
+            Amqp::AmqpMessageConverter::encode(data, "application/json"),
+            <AmqpMessageProperties>{"content_type": "application/json"}));
+
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        @assert(msg);
+        assertEq("application/json", msg.getContentType());
+
+        # Decode
+        auto decoded = Amqp::AmqpMessageConverter::decode(msg.getBody(), msg.getContentType());
+        assertEq("value", decoded.key);
+        assertEq(42, decoded.num);
+        conn.accept(msg.getDeliveryTag());
+    }
+
+    # --- DLQ routing ---
+
+    testRejectToDlq() {
+        string addr = getUniqueAddress();
+        string dlq = getUniqueAddress() + "-dlq";
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver_name = conn.createReceiver(addr);
+        string dlq_receiver = conn.createReceiver(dlq);
+
+        # Create consumer with DLQ
+        Amqp::AmqpConsumer consumer(conn, receiver_name, NOTHING, dlq);
+
+        conn.send(sender, new AmqpMessage("dlq-test"));
+        *AmqpMessage msg = consumer.receive(10s);
+        @assert(msg);
+
+        # Reject to DLQ with reason
+        consumer.rejectToDlq(msg.getDeliveryTag(), msg, "test rejection");
+
+        # Message should arrive on the DLQ
+        *AmqpMessage dlq_msg = conn.receive(dlq_receiver, 10s);
+        @assert(dlq_msg);
+        assertEq("dlq-test", dlq_msg.getBody());
+        hash<auto> app_props = dlq_msg.getApplicationProperties();
+        assertEq("test rejection", app_props."x-rejection-reason");
+        @assert(app_props."x-rejection-time");
+        conn.accept(dlq_msg.getDeliveryTag());
     }
 
     # --- Connection events ---

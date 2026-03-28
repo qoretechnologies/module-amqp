@@ -67,7 +67,7 @@ public class AmqpConnectionObservable inherits Observable {
     */
     checkEvents() {
         list<hash<auto>> events = m_conn.getConnectionEvents();
-        for (hash<auto> ev in events) {
+        foreach hash<auto> ev in (events) {
             notifyObservers(ev.event, ev);
         }
     }

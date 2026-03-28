@@ -25,6 +25,18 @@
 %modern
 
 %requires amqp
+%requires DataProvider
+
+# Optional serialization modules loaded at runtime via call_function()
+# in AmqpMessageConverter — no %try-module needed here
+%try-module json >= 1.0
+%endtry
+
+%try-module yaml >= 1.0
+%endtry
+
+%try-module xml >= 1.0
+%endtry
 
 module AmqpUtil {
     version = "1.0";

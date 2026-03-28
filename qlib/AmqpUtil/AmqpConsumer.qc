@@ -52,18 +52,27 @@ public class AmqpConsumer {
 
         #! Durable subscription name (if any)
         *string m_subscription_name;
+
+        #! Dead letter queue address (if configured)
+        *string m_dlq_address;
+
+        #! DLQ sender link name (lazy-created)
+        *string m_dlq_sender;
     }
 
     #! Create a new consumer
     /** @param conn the AMQP connection
         @param receiver the receiver link name
         @param subscription_name optional durable subscription name
+        @param dlq_address optional dead letter queue address
 
     */
-    constructor(AmqpConnection conn, string receiver, *string subscription_name) {
+    constructor(AmqpConnection conn, string receiver, *string subscription_name,
+            *string dlq_address) {
         m_conn = conn;
         m_receiver = receiver;
         m_subscription_name = subscription_name;
+        m_dlq_address = dlq_address;
     }
 
     #! Receive a message
@@ -110,6 +119,37 @@ public class AmqpConsumer {
     modify(binary delivery_tag, bool failed, bool undeliverable,
             *hash<auto> annotations) {
         m_conn.modify(delivery_tag, failed, undeliverable, annotations);
+    }
+
+    #! Reject a message and forward it to the dead letter queue
+    /** If a DLQ address is configured, the message body and properties are forwarded
+        to the DLQ with additional annotations (\c x-original-address,
+        \c x-rejection-reason, \c x-rejection-time). If no DLQ is configured,
+        falls back to a plain reject.
+
+        @param delivery_tag the delivery tag
+        @param msg the original message (needed for DLQ forwarding)
+        @param reason optional rejection reason string
+    */
+    rejectToDlq(binary delivery_tag, AmqpMessage msg, *string reason) {
+        if (m_dlq_address) {
+            # Forward to DLQ with annotations
+            if (!m_dlq_sender) {
+                m_dlq_sender = m_conn.createSender(m_dlq_address);
+            }
+            hash<AmqpMessageProperties> props = msg.getProperties();
+            # Add DLQ metadata to application properties
+            hash<auto> app_props = props.application_properties ?? {};
+            app_props."x-original-address" = m_receiver;
+            app_props."x-rejection-time" = now_us().format("YYYY-MM-DD HH:mm:SS.xx");
+            if (reason) {
+                app_props."x-rejection-reason" = reason;
+            }
+            props.application_properties = app_props;
+            m_conn.send(m_dlq_sender, new AmqpMessage(msg.getBody(), props));
+        }
+        # Always reject the original
+        m_conn.reject(delivery_tag);
     }
 
     #! Close the consumer's receiver link
