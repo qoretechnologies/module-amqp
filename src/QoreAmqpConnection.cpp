@@ -1821,38 +1821,15 @@ void QoreAmqpConnection::beginTransaction(ExceptionSink* xsink) {
 
     if (!scheduleWork([&, this]() {
         try {
-            // Get the session for coordinator creation.
-            // cached_session_ is set from on_sender_open/on_receiver_open
-            // handlers when any link opens (portable, no proton_unwrap on
-            // connection needed).
-            pn_session_t* c_sess = cached_session_;
-            if (!c_sess) {
-                // No links have been opened yet — create a temp sender to
-                // force a session to be established
-                proton::sender probe = connection_.open_sender("_txn_session_probe");
-                // The on_sender_open handler will cache the session
-                // but it fires asynchronously. We need to get the session
-                // NOW. Use proton_unwrap on the sender (non-polymorphic on
-                // some platforms, polymorphic on others — check both).
-                pn_link_t* probe_link = proton_unwrap<pn_link_t>(probe);
-                if (probe_link) {
-                    c_sess = pn_link_session(probe_link);
-                    cached_session_ = c_sess;
-                }
-                probe.close();
-            }
-            if (!c_sess) {
-                link_error = "failed to obtain session for transaction coordinator";
-            } else {
-                // Create coordinator sender via C API on the container's session.
-                // Setting PN_COORDINATOR BEFORE pn_link_open() ensures the ATTACH
-                // frame carries the correct target type.
-                pn_link_t* c_link = pn_sender(c_sess, TXN_COORDINATOR_NAME);
-                pn_terminus_set_type(pn_link_target(c_link), PN_COORDINATOR);
-                pn_link_open(c_link);
-
-                txn_coordinator_link_ = c_link;
-            }
+            // Create coordinator via C++ open_sender (portable, no proton_unwrap
+            // on connection/session needed). Then modify the target terminus type
+            // to PN_COORDINATOR via C API. Because we're inside a work_queue
+            // lambda, the ATTACH frame hasn't been flushed to the transport yet,
+            // so the terminus modification takes effect.
+            proton::sender coord = connection_.open_sender("");
+            pn_link_t* c_link = proton_unwrap<pn_link_t>(coord);
+            pn_terminus_set_type(pn_link_target(c_link), PN_COORDINATOR);
+            txn_coordinator_link_ = c_link;
         } catch (const std::exception& e) {
             link_error = e.what();
         }
