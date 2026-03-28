@@ -403,7 +403,6 @@ void QoreAmqpConnection::Handler::on_sender_close(proton::sender& s) {
     pn_link_t* link = proton_unwrap<pn_link_t>(s);
     if (link == conn_.txn_coordinator_link_) {
         std::string err = s.error().what();
-        fprintf(stderr, "DEBUG coordinator CLOSED by broker: %s\n", err.c_str());
         std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
         conn_.txn_error_ = "coordinator closed by broker: " + err;
         conn_.txn_coordinator_ready_ = true;  // unblock the wait
@@ -415,7 +414,6 @@ void QoreAmqpConnection::Handler::on_sender_error(proton::sender& s) {
     pn_link_t* link = proton_unwrap<pn_link_t>(s);
     if (link == conn_.txn_coordinator_link_) {
         std::string err = s.error().what();
-        fprintf(stderr, "DEBUG coordinator ERROR: %s\n", err.c_str());
         std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
         conn_.txn_error_ = "coordinator error: " + err;
         conn_.txn_coordinator_ready_ = true;
@@ -1814,6 +1812,72 @@ void QoreAmqpConnection::modify(const BinaryNode* delivery_tag, bool failed, boo
     }, xsink);
 }
 
+void QoreAmqpConnection::scheduleCoordinatorGuard() {
+#if PN_VERSION_MAJOR > 0 || PN_VERSION_MINOR >= 40
+    // Proton C++ >= 0.40.0 added a coordinator rejection in
+    // messaging_adapter::on_link_remote_open() (PROTON-2825). When the broker
+    // responds to our coordinator ATTACH, the adapter sees PN_COORDINATOR on
+    // the remote target and closes the link with "amqp:not-implemented" BEFORE
+    // our handler is called.
+    //
+    // Workaround: schedule a guard work item that is executed by
+    // run_all_jobs() before each event dispatch (see
+    // proactor_container_impl.cpp:562-567 — run_all_jobs() runs for every
+    // event before the messaging_adapter dispatches it). When the guard
+    // detects that the broker has set the remote target to PN_COORDINATOR, it
+    // changes the type to PN_TARGET so the adapter's check does not match.
+    // This is safe because the target type is only meaningful during the ATTACH
+    // exchange and does not affect subsequent Declare/Discharge messages.
+    //
+    // The guard re-schedules itself (via work_queue::add) until it either
+    // succeeds or the link is closed/gone. Each re-schedule triggers a
+    // pn_connection_wake, so the event loop does not block while waiting.
+    std::lock_guard<std::mutex> lock(wq_mutex_);
+    if (!work_queue_) {
+        return;
+    }
+    work_queue_->add(proton::make_work([this]() {
+        pn_link_t* c_link = txn_coordinator_link_;
+        if (!c_link) {
+            return;  // coordinator gone — nothing to guard
+        }
+        int state = pn_link_state(c_link);
+        if (state & PN_LOCAL_CLOSED) {
+            return;  // already closed (adapter or broker) — stop guarding
+        }
+        pn_terminus_t* remote_target = pn_link_remote_target(c_link);
+        if (pn_terminus_get_type(remote_target) == PN_COORDINATOR) {
+            // Broker has responded — neutralize the target type before the
+            // messaging_adapter's on_link_remote_open() can reject it.
+            pn_terminus_set_type(remote_target, PN_TARGET);
+            return;  // done — no need to reschedule
+        }
+        // Remote target not set yet (broker hasn't responded); reschedule
+        // so the guard is present for the next event dispatch cycle.
+        {
+            std::lock_guard<std::mutex> lk(wq_mutex_);
+            if (work_queue_) {
+                work_queue_->add(proton::make_work([this]() {
+                    // Re-check directly rather than recursing through
+                    // scheduleCoordinatorGuard to avoid extra locking overhead.
+                    pn_link_t* cl = txn_coordinator_link_;
+                    if (!cl || (pn_link_state(cl) & PN_LOCAL_CLOSED)) {
+                        return;
+                    }
+                    pn_terminus_t* rt = pn_link_remote_target(cl);
+                    if (pn_terminus_get_type(rt) == PN_COORDINATOR) {
+                        pn_terminus_set_type(rt, PN_TARGET);
+                        return;
+                    }
+                    // Still not set — schedule one more round.
+                    scheduleCoordinatorGuard();
+                }));
+            }
+        }
+    }));
+#endif  // PN_VERSION_MAJOR > 0 || PN_VERSION_MINOR >= 40
+}
+
 void QoreAmqpConnection::beginTransaction(ExceptionSink* xsink) {
     if (!checkConnected(xsink)) {
         return;
@@ -1885,6 +1949,21 @@ void QoreAmqpConnection::beginTransaction(ExceptionSink* xsink) {
             pn_terminus_set_type(pn_link_target(c_link), PN_COORDINATOR);
             pn_link_open(c_link);
             txn_coordinator_link_ = c_link;
+
+            // Workaround for Proton C++ >= 0.40.0 (PROTON-2825):
+            // The C++ messaging_adapter's on_link_remote_open() rejects ANY link
+            // whose remote target is PN_COORDINATOR by setting amqp:not-implemented
+            // and calling pn_link_close(). This was intended for server-side
+            // rejection of incoming coordinator links but also breaks client-side
+            // coordinators created via the C API.
+            //
+            // Fix: schedule a guard work item that runs via run_all_jobs() BEFORE
+            // each event dispatch. When the broker's ATTACH response sets the
+            // remote target to PN_COORDINATOR, the guard changes it to PN_TARGET
+            // before the adapter checks it. This prevents the rejection while
+            // preserving correct coordinator behavior (the target type is only
+            // checked during ATTACH exchange, not for subsequent messages).
+            scheduleCoordinatorGuard();
         } catch (const std::exception& e) {
             link_error = e.what();
         }

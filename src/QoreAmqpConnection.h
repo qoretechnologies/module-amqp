@@ -55,6 +55,7 @@
 #include <proton/disposition.h>
 #include <proton/terminus.h>
 #include <proton/codec.h>
+#include <proton/version.h>
 
 #include <thread>
 #include <mutex>
@@ -394,6 +395,11 @@ private:
 
     //! Send a Discharge message on the coordinator and wait for confirmation
     DLLLOCAL void discharge(bool fail, ExceptionSink* xsink);
+
+    //! Schedule a work queue guard to prevent Proton >= 0.40.0 from rejecting
+    //! the coordinator link (PROTON-2825 workaround).  Must be called from the
+    //! Proton event thread (i.e. inside a work callback).
+    DLLLOCAL void scheduleCoordinatorGuard();
 
     // Management sender/receiver
     std::mutex mgmt_mutex_;
