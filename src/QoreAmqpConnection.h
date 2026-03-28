@@ -351,6 +351,10 @@ private:
     //! Push a connection event (called from Proton event thread)
     DLLLOCAL void pushEvent(const std::string& event_id, const std::string& error = "");
 
+    // Cached C-level pointers for coordinator link creation
+    // Set from on_sender_open/on_receiver_open where we have safe C access
+    pn_session_t* cached_session_ = nullptr;
+
     // Link registry for reconnection recovery
     struct LinkInfo {
         std::string address;

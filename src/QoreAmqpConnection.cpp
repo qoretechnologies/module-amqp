@@ -55,7 +55,13 @@
 // Proton C++ types store the underlying C pointer as their first (or only) data member.
 // Polymorphic types (sender, receiver, connection) have a vtable pointer before the
 // data, so the C pointer is at offset sizeof(void*). Non-polymorphic types (tracker,
-// transfer) store the C pointer at offset 0.
+// transfer, message) store the C pointer at offset 0.
+//
+// Compile-time verification: object<T> is 8 bytes (just a pointer).
+// Polymorphic types add vtable + possibly extra fields.
+static_assert(sizeof(proton::internal::object<pn_link_t>) == sizeof(void*),
+    "Unexpected proton::internal::object size — proton_unwrap offset may be wrong");
+
 template <typename CType, typename CppType>
 CType* proton_unwrap(const CppType& obj) {
     CType* ptr;
@@ -374,11 +380,23 @@ void QoreAmqpConnection::Handler::on_connection_error(proton::connection& c) {
 }
 
 void QoreAmqpConnection::Handler::on_sender_open(proton::sender& s) {
-    // Sender is ready
+    // Cache the session for later coordinator creation
+    // pn_event_link gives us the raw C pointer without proton_unwrap
+    if (!conn_.cached_session_) {
+        pn_link_t* link = proton_unwrap<pn_link_t>(s);
+        if (link) {
+            conn_.cached_session_ = pn_link_session(link);
+        }
+    }
 }
 
 void QoreAmqpConnection::Handler::on_receiver_open(proton::receiver& r) {
-    // Receiver is ready
+    if (!conn_.cached_session_) {
+        pn_link_t* link = proton_unwrap<pn_link_t>(r);
+        if (link) {
+            conn_.cached_session_ = pn_link_session(link);
+        }
+    }
 }
 
 void QoreAmqpConnection::Handler::on_sendable(proton::sender& s) {
@@ -1803,34 +1821,38 @@ void QoreAmqpConnection::beginTransaction(ExceptionSink* xsink) {
 
     if (!scheduleWork([&, this]() {
         try {
-            // Get the container's session from an existing link.
-            // We need C API to create a coordinator (PN_COORDINATOR target
-            // must be set BEFORE the link is opened / ATTACH is serialized).
-            pn_session_t* c_sess = nullptr;
-            {
-                std::lock_guard<std::mutex> lk2(links_mutex_);
-                if (!senders_.empty()) {
-                    c_sess = pn_link_session(proton_unwrap<pn_link_t>(senders_.begin()->second));
-                } else if (!receivers_.empty()) {
-                    c_sess = pn_link_session(proton_unwrap<pn_link_t>(receivers_.begin()->second));
+            // Get the session for coordinator creation.
+            // cached_session_ is set from on_sender_open/on_receiver_open
+            // handlers when any link opens (portable, no proton_unwrap on
+            // connection needed).
+            pn_session_t* c_sess = cached_session_;
+            if (!c_sess) {
+                // No links have been opened yet — create a temp sender to
+                // force a session to be established
+                proton::sender probe = connection_.open_sender("_txn_session_probe");
+                // The on_sender_open handler will cache the session
+                // but it fires asynchronously. We need to get the session
+                // NOW. Use proton_unwrap on the sender (non-polymorphic on
+                // some platforms, polymorphic on others — check both).
+                pn_link_t* probe_link = proton_unwrap<pn_link_t>(probe);
+                if (probe_link) {
+                    c_sess = pn_link_session(probe_link);
+                    cached_session_ = c_sess;
                 }
+                probe.close();
             }
             if (!c_sess) {
-                // No existing links — create a temp sender to obtain the session
-                proton::sender temp = connection_.open_sender("_txn_session_probe");
-                pn_link_t* tmp = proton_unwrap<pn_link_t>(temp);
-                c_sess = pn_link_session(tmp);
-                pn_link_close(tmp);
+                link_error = "failed to obtain session for transaction coordinator";
+            } else {
+                // Create coordinator sender via C API on the container's session.
+                // Setting PN_COORDINATOR BEFORE pn_link_open() ensures the ATTACH
+                // frame carries the correct target type.
+                pn_link_t* c_link = pn_sender(c_sess, TXN_COORDINATOR_NAME);
+                pn_terminus_set_type(pn_link_target(c_link), PN_COORDINATOR);
+                pn_link_open(c_link);
+
+                txn_coordinator_link_ = c_link;
             }
-
-            // Create coordinator sender via C API on the container's session.
-            // Setting PN_COORDINATOR BEFORE pn_link_open() ensures the ATTACH
-            // frame carries the correct target type.
-            pn_link_t* c_link = pn_sender(c_sess, TXN_COORDINATOR_NAME);
-            pn_terminus_set_type(pn_link_target(c_link), PN_COORDINATOR);
-            pn_link_open(c_link);
-
-            txn_coordinator_link_ = c_link;
         } catch (const std::exception& e) {
             link_error = e.what();
         }
