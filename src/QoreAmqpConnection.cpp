@@ -400,8 +400,11 @@ void QoreAmqpConnection::Handler::on_receiver_open(proton::receiver& r) {
 }
 
 void QoreAmqpConnection::Handler::on_sendable(proton::sender& s) {
-    // Check if this is the transaction coordinator (compare C link pointers)
+    // Check if this is the transaction coordinator
     pn_link_t* link = proton_unwrap<pn_link_t>(s);
+    fprintf(stderr, "DEBUG on_sendable: link=%p name='%s' coord=%p match=%d\n",
+        (void*)link, s.name().c_str(), (void*)conn_.txn_coordinator_link_,
+        link == conn_.txn_coordinator_link_);
     if (link == conn_.txn_coordinator_link_) {
         std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
         conn_.txn_coordinator_ready_ = true;
@@ -1861,6 +1864,8 @@ void QoreAmqpConnection::beginTransaction(ExceptionSink* xsink) {
             pn_terminus_set_type(pn_link_target(c_link), PN_COORDINATOR);
             pn_link_open(c_link);
             txn_coordinator_link_ = c_link;
+            fprintf(stderr, "DEBUG coordinator created: link=%p sess=%p name='%s'\n",
+                (void*)c_link, (void*)c_sess, pn_link_name(c_link));
         } catch (const std::exception& e) {
             link_error = e.what();
         }
