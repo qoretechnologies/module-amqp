@@ -101,6 +101,10 @@ public class AmqpIntegrationTest inherits QUnit::Test {
         # Batch send
         addTestCase("batch send 10 messages", \testBatchSend());
         addTestCase("batch send empty list", \testBatchSendEmpty());
+        addTestCase("transacted batch send commit", \testTxnBatchSendCommit());
+
+        # Durable subscriptions
+        addTestCase("durable receiver lifecycle", \testDurableReceiverLifecycle());
 
         # Shared subscriptions
         addTestCase("shared subscription option", \testSharedSubscription());
@@ -715,6 +719,61 @@ public class AmqpIntegrationTest inherits QUnit::Test {
         string sender = conn.createSender("batch-empty-test");
         list<hash<AmqpDeliveryInfo>> results = conn.sendBatch(sender, ());
         assertEq(0, results.size());
+    }
+
+    testTxnBatchSendCommit() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        # Batch send within transaction + commit
+        conn.beginTransaction();
+        list<AmqpMessage> batch = (
+            new AmqpMessage("txn-batch-1"),
+            new AmqpMessage("txn-batch-2"),
+            new AmqpMessage("txn-batch-3"),
+        );
+        list<hash<AmqpDeliveryInfo>> results = conn.sendBatch(sender, batch);
+        assertEq(3, results.size());
+        conn.commitTransaction();
+
+        # All 3 messages should be delivered after commit
+        for (int i = 0; i < 3; ++i) {
+            *AmqpMessage msg = conn.receive(receiver, 10s);
+            @assert(msg);
+            assertEq(sprintf("txn-batch-%d", i + 1), msg.getBody());
+            conn.accept(msg.getDeliveryTag());
+        }
+    }
+
+    # --- Durable subscriptions ---
+
+    testDurableReceiverLifecycle() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+
+        # Create durable receiver
+        string receiver = conn.createDurableReceiver(addr, "test-durable-sub");
+        @assert(receiver);
+
+        # Send and receive
+        conn.send(sender, new AmqpMessage("durable-test"));
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        @assert(msg);
+        assertEq("durable-test", msg.getBody());
+        conn.accept(msg.getDeliveryTag());
+
+        # Close durable receiver (subscription persists)
+        conn.closeDurableReceiver(receiver);
+
+        # Unsubscribe
+        conn.unsubscribeDurable("test-durable-sub");
     }
 
     # --- Shared subscriptions ---

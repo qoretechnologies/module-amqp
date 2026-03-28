@@ -1320,11 +1320,23 @@ QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMe
         return nullptr;
     }
 
-    // Wait for broker confirmation (tracker accept/reject) with cooperative cancellation
+    // For transacted sends, the broker confirms deliveries only at discharge
+    // (commit/rollback), not individually. Skip the confirmation wait.
     bool accepted = false;
     std::string tracker_error;
     proton::binary delivery_tag;
-    {
+
+    if (is_transacted) {
+        // Transacted: assume accepted — actual outcome comes at commit/rollback
+        accepted = true;
+        std::lock_guard<std::mutex> lock(send_mutex_);
+        auto it = send_results_.find(tag_key);
+        if (it != send_results_.end()) {
+            delivery_tag = it->second.tag;
+            send_results_.erase(it);
+        }
+    } else {
+        // Non-transacted: wait for broker confirmation
         std::unique_lock<std::mutex> lock(send_mutex_);
         bool confirmed = waitWithCancel(lock, send_cv_, [&, this]() {
             auto it = send_results_.find(tag_key);
@@ -1337,7 +1349,6 @@ QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMe
             return !connected_.load();
         }, 30000, "AmqpConnection::send", xsink);
 
-        // Clean up the tracking entry
         send_results_.erase(tag_key);
 
         if (*xsink) {
@@ -1345,12 +1356,11 @@ QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMe
         }
 
         if (!confirmed && connected_) {
-            // Timeout waiting for confirmation — treat as accepted (fire-and-forget)
             accepted = true;
         }
     }
 
-    if (!connected_ && !accepted) {
+    if (!is_transacted && !connected_ && !accepted) {
         xsink->raiseException("AMQP-SEND-ERROR", "connection lost while waiting for send confirmation");
         return nullptr;
     }
@@ -1529,10 +1539,11 @@ QoreListNode* QoreAmqpConnection::sendBatch(const char* sender_name,
         return nullptr;
     }
 
-    // Wait for all confirmations
-    {
+    // Wait for confirmations (skip for transacted — broker confirms at discharge)
+    bool confirmed = is_transacted;
+    if (!is_transacted) {
         std::unique_lock<std::mutex> lock(send_mutex_);
-        bool confirmed = waitWithCancel(lock, send_cv_, [&, this]() {
+        confirmed = waitWithCancel(lock, send_cv_, [&, this]() {
             for (size_t i = 0; i < count; ++i) {
                 auto it = send_results_.find(tag_keys[i]);
                 if (it == send_results_.end() || !it->second.done) {
@@ -1545,13 +1556,17 @@ QoreListNode* QoreAmqpConnection::sendBatch(const char* sender_name,
         if (*xsink) {
             return nullptr;
         }
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(send_mutex_);
 
         // Build result list
         ReferenceHolder<QoreListNode> result(
             new QoreListNode(hashdeclAmqpDeliveryInfo->getTypeInfo()), xsink);
         for (size_t i = 0; i < count; ++i) {
             auto it = send_results_.find(tag_keys[i]);
-            bool accepted = confirmed && it != send_results_.end() && it->second.accepted;
+            bool accepted = is_transacted || (confirmed && it != send_results_.end() && it->second.accepted);
             proton::binary dtag;
             if (it != send_results_.end()) {
                 dtag = it->second.tag;

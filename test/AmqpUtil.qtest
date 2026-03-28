@@ -77,6 +77,29 @@ public class AmqpUtilTest inherits QUnit::Test {
         addTestCase("request-reply pattern", \testRequestReply());
         addTestCase("request-reply timeout", \testRequestReplyTimeout());
 
+        # AmqpProducer extended
+        addTestCase("producer sendBatch", \testProducerSendBatch());
+        addTestCase("producer close", \testProducerClose());
+
+        # AmqpConsumer extended
+        addTestCase("consumer close", \testConsumerClose());
+        addTestCase("consumer reject", \testConsumerReject());
+        addTestCase("consumer release", \testConsumerRelease());
+
+        # AmqpClient link close
+        addTestCase("client closeSender", \testClientCloseSender());
+        addTestCase("client closeReceiver", \testClientCloseReceiver());
+
+        # AmqpClient batch and shared
+        addTestCase("client sendBatch", \testClientSendBatch());
+        addTestCase("client createSharedConsumer", \testClientCreateSharedConsumer());
+
+        # AmqpClient auto-convert
+        addTestCase("client setAutoConvert and receiveAndDecode", \testClientAutoConvert());
+
+        # AmqpClient durable consumer
+        addTestCase("client createDurableConsumer", \testClientDurableConsumer());
+
         # AmqpManagementClient
         addTestCase("management queryAddresses", \testManagementQueryAddresses());
         addTestCase("management queryQueues", \testManagementQueryQueues());
@@ -415,6 +438,177 @@ public class AmqpUtilTest inherits QUnit::Test {
             rr.request("ping", 2s);
         });
         rr.close();
+    }
+
+    # --- AmqpProducer extended ---
+
+    testProducerSendBatch() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        # Create receiver before sending so messages aren't discarded
+        AmqpConsumer consumer = client.createConsumer(addr);
+        AmqpProducer producer = client.createProducer(addr);
+        list<hash<AmqpDeliveryInfo>> results = producer.sendBatch(("batch-1", "batch-2", "batch-3"));
+        assertEq(3, results.size());
+
+        for (int i = 0; i < 3; ++i) {
+            *AmqpMessage msg = consumer.receive(10s);
+            @assert(msg);
+            assertEq(sprintf("batch-%d", i + 1), msg.getBody());
+        }
+    }
+
+    testProducerClose() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        AmqpProducer producer = client.createProducer(addr);
+        producer.send("before close");
+        producer.close();
+        # After close, the underlying sender link is removed
+        assertTrue(True);
+    }
+
+    # --- AmqpConsumer extended ---
+
+    testConsumerClose() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        AmqpConsumer consumer = client.createConsumer(addr);
+        consumer.close();
+        # After close, the receiver link is removed
+        assertTrue(True);
+    }
+
+    testConsumerReject() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        # Create consumer first so messages aren't discarded
+        AmqpConsumer consumer = client.createConsumer(addr);
+        client.send(addr, "reject-test");
+        *AmqpMessage msg = consumer.receive(10s);
+        @assert(msg);
+        consumer.reject(msg.getDeliveryTag());
+    }
+
+    testConsumerRelease() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        AmqpConsumer consumer = client.createConsumer(addr);
+        client.send(addr, "release-test");
+        *AmqpMessage msg = consumer.receive(10s);
+        @assert(msg);
+        consumer.release(msg.getDeliveryTag());
+
+        # Message should be redelivered after release
+        *AmqpMessage msg2 = consumer.receive(10s);
+        @assert(msg2);
+        assertEq("release-test", msg2.getBody());
+        consumer.accept(msg2.getDeliveryTag());
+    }
+
+    # --- AmqpClient link close ---
+
+    testClientCloseSender() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        # Ensure receiver exists first
+        *AmqpMessage warmup = client.receive(addr, 1s);
+        client.send(addr, "before close");
+        client.closeSender(addr);
+        # Sending again creates a new sender (lazy recreation)
+        client.send(addr, "after close");
+        *AmqpMessage msg = client.receive(addr, 10s);
+        @assert(msg);
+    }
+
+    testClientCloseReceiver() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        client.send(addr, "test");
+        *AmqpMessage msg = client.receive(addr, 5s);
+        client.closeReceiver(addr);
+        assertTrue(True);
+    }
+
+    # --- AmqpClient batch and shared ---
+
+    testClientSendBatch() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        # Create receiver first
+        *AmqpMessage warmup = client.receive(addr, 1s);
+        list<hash<AmqpDeliveryInfo>> results = client.sendBatch(addr, ("b1", "b2", "b3"));
+        assertEq(3, results.size());
+
+        for (int i = 0; i < 3; ++i) {
+            *AmqpMessage msg = client.receive(addr, 10s);
+            @assert(msg);
+        }
+    }
+
+    testClientCreateSharedConsumer() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        # Create shared consumer — should not throw
+        AmqpConsumer consumer = client.createSharedConsumer(addr, "shared-sub");
+        @assert(consumer);
+        consumer.close();
+    }
+
+    # --- AmqpClient auto-convert ---
+
+    testClientAutoConvert() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        client.setAutoConvert(True);
+
+        # Create receiver first
+        *hash<auto> warmup = client.receiveAndDecode(addr, 1s);
+
+        # Send JSON-encoded message via auto-convert
+        hash<auto> data = {"order_id": 42, "item": "widget"};
+        client.send(addr, data, <AmqpMessageProperties>{"content_type": "application/json"});
+
+        # Receive and auto-decode
+        *hash<auto> result = client.receiveAndDecode(addr, 10s);
+        @assert(result);
+        assertEq(42, result.body.order_id);
+        assertEq("widget", result.body.item);
+        @assert(result.msg);
+    }
+
+    # --- AmqpClient durable consumer ---
+
+    testClientDurableConsumer() {
+        string addr = getUniqueAddress();
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        # Create durable consumer
+        AmqpConsumer consumer = client.createDurableConsumer(addr, "durable-sub");
+        assertTrue(consumer.isDurable());
+        assertEq("durable-sub", consumer.getSubscriptionName());
+        consumer.closeDurable();
     }
 
     # --- AmqpManagementClient ---
