@@ -62,27 +62,7 @@ const TypedHashDecl* hashdeclAmqpConnectionStats = nullptr;
 
 QoreNamespace AmqpNs("Qore::Amqp");
 
-#include <proton/sender.hpp>
-#include <proton/receiver.hpp>
-#include <proton/connection.hpp>
-#include <proton/tracker.hpp>
-#include <proton/message.hpp>
-#include <proton/link.hpp>
-#include <proton/internal/object.hpp>
-
 static void amqp_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
-    // Debug: print Proton C++ type layout for cross-platform verification
-    fprintf(stderr, "AMQP module Proton layout: object=%zu sender=%zu(poly=%d) "
-        "receiver=%zu(poly=%d) connection=%zu(poly=%d) tracker=%zu(poly=%d) "
-        "message=%zu(poly=%d) link=%zu(poly=%d)\n",
-        sizeof(proton::internal::object<pn_link_t>),
-        sizeof(proton::sender), std::is_polymorphic_v<proton::sender>,
-        sizeof(proton::receiver), std::is_polymorphic_v<proton::receiver>,
-        sizeof(proton::connection), std::is_polymorphic_v<proton::connection>,
-        sizeof(proton::tracker), std::is_polymorphic_v<proton::tracker>,
-        sizeof(proton::message), std::is_polymorphic_v<proton::message>,
-        sizeof(proton::link), std::is_polymorphic_v<proton::link>);
-
     // Initialize hashdecls (dependency order — SSL/SASL before ConnectionOptions)
     hashdeclAmqpSslOptions = init_hashdecl_AmqpSslOptions(AmqpNs);
     hashdeclAmqpSaslOptions = init_hashdecl_AmqpSaslOptions(AmqpNs);

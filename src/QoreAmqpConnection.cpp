@@ -1821,14 +1821,45 @@ void QoreAmqpConnection::beginTransaction(ExceptionSink* xsink) {
 
     if (!scheduleWork([&, this]() {
         try {
-            // Create coordinator via C++ open_sender (portable, no proton_unwrap
-            // on connection/session needed). Then modify the target terminus type
-            // to PN_COORDINATOR via C API. Because we're inside a work_queue
-            // lambda, the ATTACH frame hasn't been flushed to the transport yet,
-            // so the terminus modification takes effect.
-            proton::sender coord = connection_.open_sender("");
-            pn_link_t* c_link = proton_unwrap<pn_link_t>(coord);
+            // Get the session for coordinator creation.
+            // cached_session_ is set from on_sender_open/on_receiver_open which
+            // fires when any link opens (before beginTransaction is called).
+            // Get session from an existing link, or create a temp one.
+            // Use proton_unwrap to get pn_link_t* from proton::sender —
+            // layout verified identical on macOS (0.39.0) and Linux CI (0.40.0):
+            // sender=24 bytes, polymorphic, pn_link_t* at offset sizeof(void*).
+            pn_session_t* c_sess = cached_session_;
+            if (!c_sess) {
+                std::lock_guard<std::mutex> lk2(links_mutex_);
+                if (!senders_.empty()) {
+                    c_sess = pn_link_session(proton_unwrap<pn_link_t>(senders_.begin()->second));
+                } else if (!receivers_.empty()) {
+                    c_sess = pn_link_session(proton_unwrap<pn_link_t>(receivers_.begin()->second));
+                }
+            }
+            if (!c_sess) {
+                proton::sender probe = connection_.open_sender("_txn_probe");
+                pn_link_t* probe_link = proton_unwrap<pn_link_t>(probe);
+                c_sess = pn_link_session(probe_link);
+                cached_session_ = c_sess;
+                probe.close();
+            }
+            if (!c_sess) {
+                link_error = "failed to obtain session for transaction coordinator";
+                std::lock_guard<std::mutex> lk3(mtx);
+                link_done = true;
+                cv.notify_all();
+                return;
+            }
+            cached_session_ = c_sess;
+
+            // Create coordinator via C API: pn_sender() + set PN_COORDINATOR
+            // BEFORE pn_link_open(). This ensures the ATTACH frame carries the
+            // coordinator target type (open_sender() serializes the ATTACH
+            // immediately, so modifying the terminus after is too late).
+            pn_link_t* c_link = pn_sender(c_sess, TXN_COORDINATOR_NAME);
             pn_terminus_set_type(pn_link_target(c_link), PN_COORDINATOR);
+            pn_link_open(c_link);
             txn_coordinator_link_ = c_link;
         } catch (const std::exception& e) {
             link_error = e.what();
