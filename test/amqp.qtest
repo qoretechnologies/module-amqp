@@ -85,6 +85,18 @@ public class AmqpTest inherits QUnit::Test {
         # Delivery tag tests
         addTestCase("getDeliveryTag on created message", \testDeliveryTagCreatedMessage());
 
+        # URL credential extraction tests
+        addTestCase("URL with credentials", \testUrlCredentials());
+        addTestCase("URL without credentials", \testUrlNoCredentials());
+
+        # Link close tests (no broker needed)
+        addTestCase("closeSender without connection throws", \testCloseSenderNoConn());
+        addTestCase("closeReceiver without connection throws", \testCloseReceiverNoConn());
+
+        # Statistics tests (no broker needed)
+        addTestCase("AmqpConnectionStats hashdecl", \testConnectionStatsHashdecl());
+        addTestCase("getStatistics without connection", \testStatsNoConnection());
+
         # Transaction state tests (no broker needed)
         addTestCase("inTransaction initial state", \testInTransactionInitial());
         addTestCase("commit without connection throws", \testCommitWithoutConnection());
@@ -522,6 +534,78 @@ public class AmqpTest inherits QUnit::Test {
 
         AmqpMessage msg2(42, <AmqpMessageProperties>{"message_id": "test-id"});
         assertNothing(msg2.getDeliveryTag());
+    }
+
+    # --- URL credential extraction tests ---
+
+    testUrlCredentials() {
+        # URL with user:pass should auto-set SASL credentials
+        # (verified indirectly: connection to a broker that requires auth would succeed)
+        # Here we just verify the constructor doesn't throw with credentials in URL
+        AmqpConnection conn(<AmqpConnectionOptions>{
+            "url": "amqp://testuser:testpass@localhost:5672",
+        });
+        assertEq(False, conn.isConnected());
+    }
+
+    testUrlNoCredentials() {
+        # URL without credentials should work too
+        AmqpConnection conn(<AmqpConnectionOptions>{
+            "url": "amqp://localhost:5672",
+        });
+        assertEq(False, conn.isConnected());
+    }
+
+    # --- Link close tests ---
+
+    testCloseSenderNoConn() {
+        AmqpConnection conn(<AmqpConnectionOptions>{
+            "url": "amqp://localhost:5672",
+        });
+        assertThrows("AMQP-CONNECTION-ERROR", sub() {
+            conn.closeSender("nonexistent");
+        });
+    }
+
+    testCloseReceiverNoConn() {
+        AmqpConnection conn(<AmqpConnectionOptions>{
+            "url": "amqp://localhost:5672",
+        });
+        assertThrows("AMQP-CONNECTION-ERROR", sub() {
+            conn.closeReceiver("nonexistent");
+        });
+    }
+
+    # --- Statistics tests ---
+
+    testConnectionStatsHashdecl() {
+        hash<AmqpConnectionStats> stats = <AmqpConnectionStats>{
+            "messages_sent": 10,
+            "messages_received": 5,
+            "bytes_sent": 1024,
+            "bytes_received": 512,
+            "errors": 0,
+            "link_count": 2,
+        };
+        assertEq(10, stats.messages_sent);
+        assertEq(5, stats.messages_received);
+        assertEq(1024, stats.bytes_sent);
+        assertEq(512, stats.bytes_received);
+        assertEq(0, stats.errors);
+        assertEq(2, stats.link_count);
+        assertNothing(stats.connected_since);
+    }
+
+    testStatsNoConnection() {
+        # getStatistics should work even when not connected
+        AmqpConnection conn(<AmqpConnectionOptions>{
+            "url": "amqp://localhost:5672",
+        });
+        hash<AmqpConnectionStats> stats = conn.getStatistics();
+        assertEq(0, stats.messages_sent);
+        assertEq(0, stats.messages_received);
+        assertEq(0, stats.link_count);
+        assertNothing(stats.connected_since);
     }
 
     # --- Transaction state tests ---

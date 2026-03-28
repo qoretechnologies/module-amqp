@@ -41,7 +41,6 @@ public const EVENT_AMQP_MESSAGE = "amqp-message";
     - \c subject: subject (if set)
     - \c application_properties: application properties hash (if any)
 
-    @since AmqpDataProvider 1.0
 */
 public class AmqpEventDataProvider inherits AbstractDataProvider, DelayedObservable {
     public {

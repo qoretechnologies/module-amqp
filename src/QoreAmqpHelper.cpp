@@ -536,10 +536,13 @@ std::string QoreAmqpHelper::formatError(const std::string& prefix, const std::st
     return prefix + ": " + msg;
 }
 
-void QoreAmqpHelper::parseUrlHostPort(const std::string& url, std::string& host, int& port) {
+void QoreAmqpHelper::parseUrl(const std::string& url, std::string& host, int& port,
+        std::string& user, std::string& password) {
     // URL format: amqp[s]://[user[:password]@]host[:port][/path]
     bool tls = (url.substr(0, 5) == "amqps");
     port = tls ? 5671 : 5672;
+    user.clear();
+    password.clear();
 
     // Find the authority part (after "://")
     size_t auth_start = url.find("://");
@@ -557,10 +560,19 @@ void QoreAmqpHelper::parseUrlHostPort(const std::string& url, std::string& host,
 
     std::string authority = url.substr(auth_start, auth_end - auth_start);
 
-    // Strip userinfo (user:password@)
+    // Extract userinfo (user:password@)
     size_t at_pos = authority.rfind('@');
     if (at_pos != std::string::npos) {
+        std::string userinfo = authority.substr(0, at_pos);
         authority = authority.substr(at_pos + 1);
+
+        size_t colon = userinfo.find(':');
+        if (colon != std::string::npos) {
+            user = userinfo.substr(0, colon);
+            password = userinfo.substr(colon + 1);
+        } else {
+            user = userinfo;
+        }
     }
 
     // Check for IPv6 literal [host]:port
@@ -591,4 +603,9 @@ void QoreAmqpHelper::parseUrlHostPort(const std::string& url, std::string& host,
     if (host.empty()) {
         host = "localhost";
     }
+}
+
+void QoreAmqpHelper::parseUrlHostPort(const std::string& url, std::string& host, int& port) {
+    std::string user, password;
+    parseUrl(url, host, port, user, password);
 }

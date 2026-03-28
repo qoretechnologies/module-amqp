@@ -44,7 +44,6 @@ client.close();
     If no \c reply_address is provided, a unique dynamic reply address is generated
     using the format \c "reply-<pid>-<counter>".
 
-    @since AmqpUtil 1.0
 */
 public class AmqpRequestReply {
     private {
@@ -69,7 +68,6 @@ public class AmqpRequestReply {
         @param request_address the address to send requests to
         @param reply_address optional address for replies (auto-generated if omitted)
 
-        @since AmqpUtil 1.0
     */
     constructor(AmqpClient client, string request_address, *string reply_address) {
         m_conn = client.getConnection();
@@ -92,7 +90,6 @@ public class AmqpRequestReply {
 
         @throw AMQP-REQUEST-REPLY-TIMEOUT if no response is received within the timeout
 
-        @since AmqpUtil 1.0
     */
     AmqpMessage request(auto body, timeout timeout, *hash<AmqpMessageProperties> properties) {
         # Generate a unique message ID

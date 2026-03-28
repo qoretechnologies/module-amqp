@@ -79,6 +79,15 @@ public class AmqpIntegrationTest inherits QUnit::Test {
         # Modify disposition
         addTestCase("modify message", \testModifyMessage());
 
+        # Link close
+        addTestCase("close sender", \testCloseSender());
+        addTestCase("close receiver", \testCloseReceiver());
+        addTestCase("close nonexistent sender throws", \testCloseNonexistentSender());
+
+        # Statistics
+        addTestCase("statistics after send/receive", \testStatistics());
+        addTestCase("connected_since is set", \testConnectedSince());
+
         # Transaction tests
         addTestCase("transaction commit without begin throws", \testTxnCommitWithoutBegin());
         addTestCase("transaction rollback without begin throws", \testTxnRollbackWithoutBegin());
@@ -458,6 +467,83 @@ public class AmqpIntegrationTest inherits QUnit::Test {
 
         # Accept to clean up
         conn.accept(tag);
+    }
+
+    # --- Link close ---
+
+    testCloseSender() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        conn.closeSender(sender);
+
+        # Sending on closed sender should throw
+        assertThrows("AMQP-SEND-ERROR", sub() {
+            conn.send(sender, new AmqpMessage("should fail"));
+        });
+    }
+
+    testCloseReceiver() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string receiver = conn.createReceiver(addr);
+        conn.closeReceiver(receiver);
+
+        # Receiving on closed receiver should throw
+        assertThrows("AMQP-RECEIVE-ERROR", sub() {
+            conn.receive(receiver, 1s);
+        });
+    }
+
+    testCloseNonexistentSender() {
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        assertThrows("AMQP-SENDER-ERROR", sub() {
+            conn.closeSender("nonexistent-sender");
+        });
+    }
+
+    # --- Statistics ---
+
+    testStatistics() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        # Send 3 messages
+        conn.send(sender, new AmqpMessage("stat-1"));
+        conn.send(sender, new AmqpMessage("stat-2"));
+        conn.send(sender, new AmqpMessage("stat-3"));
+
+        # Receive them
+        for (int i = 0; i < 3; ++i) {
+            *AmqpMessage msg = conn.receive(receiver, 10s);
+            @assert(msg);
+            conn.accept(msg.getDeliveryTag());
+        }
+
+        hash<AmqpConnectionStats> stats = conn.getStatistics();
+        assertTrue(stats.messages_sent >= 3);
+        assertTrue(stats.messages_received >= 3);
+        assertTrue(stats.link_count >= 2);
+    }
+
+    testConnectedSince() {
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        hash<AmqpConnectionStats> stats = conn.getStatistics();
+        @assert(stats.connected_since);
+        # connected_since should be recent (within last 30 seconds)
+        assertTrue(now_us() - stats.connected_since < 30s);
     }
 
     # --- Modify disposition ---

@@ -49,7 +49,6 @@ for (hash<AmqpQueueInfo> q in queues) {
 client.close();
     @endcode
 
-    @since AmqpUtil 1.0
 */
 public class AmqpManagementClient {
     private {
@@ -60,7 +59,6 @@ public class AmqpManagementClient {
     #! Create a new management client
     /** @param conn the AMQP connection
 
-        @since AmqpUtil 1.0
     */
     constructor(AmqpConnection conn) {
         m_conn = conn;
@@ -69,7 +67,6 @@ public class AmqpManagementClient {
     #! Query all addresses from the broker
     /** @return a list of address info hashes, or an empty list if management is not supported
 
-        @since AmqpUtil 1.0
     */
     list<hash<AmqpAddressInfo>> queryAddresses() {
         return m_conn.queryAddresses();
@@ -80,7 +77,6 @@ public class AmqpManagementClient {
 
         @return a list of queue info hashes, or an empty list if management is not supported
 
-        @since AmqpUtil 1.0
     */
     list<hash<AmqpQueueInfo>> queryQueues(*string address) {
         return m_conn.queryQueues(address);
@@ -91,7 +87,6 @@ public class AmqpManagementClient {
 
         @return address info hash, or NOTHING if not found or management is not supported
 
-        @since AmqpUtil 1.0
     */
     *hash<auto> getAddressInfo(string address) {
         return m_conn.getAddressInfo(address);
@@ -102,7 +97,6 @@ public class AmqpManagementClient {
 
         @return queue info hash, or NOTHING if not found or management is not supported
 
-        @since AmqpUtil 1.0
     */
     *hash<auto> getQueueInfo(string queue) {
         return m_conn.getQueueInfo(queue);

@@ -28,7 +28,6 @@ public namespace AmqpDataProvider {
 #! Connection class for AMQP brokers
 /** Supports \c amqp:// (plaintext) and \c amqps:// (TLS) URL schemes.
 
-    @since AmqpDataProvider 1.0
 */
 public class AmqpDataProviderConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
     public {

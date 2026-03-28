@@ -275,6 +275,10 @@ void QoreAmqpConnection::Handler::on_connection_open(proton::connection& c) {
         conn_.work_queue_ = &c.work_queue();
     }
     conn_.connected_ = true;
+    // Track connection timestamp (microseconds since epoch)
+    auto now = std::chrono::system_clock::now();
+    conn_.connected_since_epoch_us_ = std::chrono::duration_cast<std::chrono::microseconds>(
+        now.time_since_epoch()).count();
     std::lock_guard<std::mutex> lock(conn_.connect_mutex_);
     conn_.connect_error_.clear();
     conn_.connect_cv_.notify_all();
@@ -282,6 +286,7 @@ void QoreAmqpConnection::Handler::on_connection_open(proton::connection& c) {
 
 void QoreAmqpConnection::Handler::on_connection_close(proton::connection& c) {
     conn_.connected_ = false;
+    conn_.connected_since_epoch_us_ = 0;
     {
         std::lock_guard<std::mutex> lock(conn_.wq_mutex_);
         conn_.work_queue_ = nullptr;
@@ -344,6 +349,7 @@ void QoreAmqpConnection::Handler::on_sendable(proton::sender& s) {
 
 void QoreAmqpConnection::Handler::on_message(proton::delivery& d, proton::message& m) {
     std::string receiver_name = d.receiver().name();
+    ++conn_.messages_received_;
 
     {
         std::lock_guard<std::mutex> lock(conn_.recv_mutex_);
@@ -372,6 +378,7 @@ void QoreAmqpConnection::Handler::on_tracker_accept(proton::tracker& t) {
         if (it != conn_.send_results_.end()) {
             it->second.done = true;
             it->second.accepted = true;
+            ++conn_.messages_sent_;
         }
         conn_.send_cv_.notify_all();
     }
@@ -497,6 +504,7 @@ void QoreAmqpConnection::Handler::on_transport_error(proton::transport& t) {
 void QoreAmqpConnection::Handler::on_error(const proton::error_condition& ec) {
     std::string err = ec.what();
     conn_.connected_ = false;
+    ++conn_.errors_;
 
     {
         std::lock_guard<std::mutex> lock(conn_.connect_mutex_);
@@ -639,6 +647,11 @@ QoreAmqpConnection::QoreAmqpConnection(const QoreHashNode* options, ExceptionSin
             }
         }
     }
+
+    // Note: Proton extracts credentials from the URL automatically when
+    // amqp://user:pass@host is passed to container::connect(). We only need
+    // to extract them here for the checkNetworkAccess() host parsing.
+    // Explicit SASL options (set above) override URL credentials in Proton.
 }
 
 QoreAmqpConnection::~QoreAmqpConnection() {
@@ -1014,6 +1027,60 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
     }
 
     return new QoreStringNode(name);
+}
+
+void QoreAmqpConnection::closeSender(const char* sender_name, ExceptionSink* xsink) {
+    if (!checkConnected(xsink)) {
+        return;
+    }
+
+    std::string name(sender_name);
+    proton::sender sender;
+
+    {
+        std::lock_guard<std::mutex> lock(links_mutex_);
+        auto it = senders_.find(name);
+        if (it == senders_.end()) {
+            xsink->raiseException("AMQP-SENDER-ERROR", "sender '%s' not found", sender_name);
+            return;
+        }
+        sender = it->second;
+        senders_.erase(it);
+    }
+
+    scheduleWork([sender]() mutable {
+        sender.close();
+    }, xsink);
+}
+
+void QoreAmqpConnection::closeReceiver(const char* receiver_name, ExceptionSink* xsink) {
+    if (!checkConnected(xsink)) {
+        return;
+    }
+
+    std::string name(receiver_name);
+    proton::receiver receiver;
+
+    {
+        std::lock_guard<std::mutex> lock(links_mutex_);
+        auto it = receivers_.find(name);
+        if (it == receivers_.end()) {
+            xsink->raiseException("AMQP-RECEIVER-ERROR", "receiver '%s' not found", receiver_name);
+            return;
+        }
+        receiver = it->second;
+        receivers_.erase(it);
+    }
+
+    // Clean up any pending messages for this receiver
+    {
+        std::lock_guard<std::mutex> lock(recv_mutex_);
+        received_messages_.erase(name);
+    }
+
+    scheduleWork([receiver]() mutable {
+        receiver.close();
+    }, xsink);
 }
 
 QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMessage& msg,
@@ -2036,6 +2103,33 @@ QoreHashNode* QoreAmqpConnection::managementRequest(const std::string& operation
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
     result->setKeyValue("body", body, xsink);
     return result.release();
+}
+
+QoreHashNode* QoreAmqpConnection::getStatistics(ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> stats(new QoreHashNode(hashdeclAmqpConnectionStats, xsink), xsink);
+    stats->setKeyValue("messages_sent", messages_sent_.load(), xsink);
+    stats->setKeyValue("messages_received", messages_received_.load(), xsink);
+    stats->setKeyValue("bytes_sent", bytes_sent_.load(), xsink);
+    stats->setKeyValue("bytes_received", bytes_received_.load(), xsink);
+    stats->setKeyValue("errors", errors_.load(), xsink);
+
+    {
+        std::lock_guard<std::mutex> lock(links_mutex_);
+        stats->setKeyValue("link_count",
+            static_cast<int64>(senders_.size() + receivers_.size()), xsink);
+    }
+
+    if (connected_since_epoch_us_ > 0) {
+        stats->setKeyValue("connected_since",
+            DateTimeNode::makeAbsolute(0, connected_since_epoch_us_ / 1000000,
+                static_cast<int>(connected_since_epoch_us_ % 1000000)),
+            xsink);
+    }
+
+    if (*xsink) {
+        return nullptr;
+    }
+    return stats.release();
 }
 
 std::string QoreAmqpConnection::generateLinkName(const char* prefix) {

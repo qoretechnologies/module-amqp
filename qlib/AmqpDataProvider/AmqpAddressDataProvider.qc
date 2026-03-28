@@ -44,7 +44,6 @@ public namespace AmqpDataProvider {
 auto result = address_provider.doRequest({"body": "Hello, AMQP!"});
     @endcode
 
-    @since AmqpDataProvider 1.0
 */
 public class AmqpAddressDataProvider inherits AbstractDataProvider {
     public {

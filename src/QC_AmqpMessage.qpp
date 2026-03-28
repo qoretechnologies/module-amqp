@@ -32,7 +32,6 @@
 /** These properties correspond to the AMQP 1.0 message properties, application-properties,
     and annotation sections.
 
-    @since %amqp 1.0
 */
 hashdecl Qore::Amqp::AmqpMessageProperties {
     //! The message identifier (string, int, binary, or UUID string)
@@ -102,7 +101,6 @@ AmqpMessage msg({"key": "value"}, <AmqpMessageProperties>{
 });
     @endcode
 
-    @since %amqp 1.0
 */
 qclass AmqpMessage [arg=QoreAmqpMessage* msg; ns=Qore::Amqp];
 
@@ -116,7 +114,6 @@ AmqpMessage msg("Hello, World!");
 AmqpMessage msg2({"key": "value"}, <AmqpMessageProperties>{"content_type": "application/json"});
     @endcode
 
-    @since %amqp 1.0
 */
 AmqpMessage::constructor(auto body, *hash<AmqpMessageProperties> properties) {
     self->setPrivate(CID_AMQPMESSAGE, new QoreAmqpMessage(body, properties, xsink));
@@ -130,7 +127,6 @@ AmqpMessage::constructor(auto body, *hash<AmqpMessageProperties> properties) {
 auto body = msg.getBody();
     @endcode
 
-    @since %amqp 1.0
 */
 auto AmqpMessage::getBody() [flags=RET_VALUE_ONLY] {
     return msg->getBody(xsink);
@@ -144,7 +140,6 @@ auto AmqpMessage::getBody() [flags=RET_VALUE_ONLY] {
 hash<AmqpMessageProperties> props = msg.getProperties();
     @endcode
 
-    @since %amqp 1.0
 */
 hash<AmqpMessageProperties> AmqpMessage::getProperties() [flags=RET_VALUE_ONLY] {
     return msg->getProperties(xsink);
@@ -158,7 +153,6 @@ hash<AmqpMessageProperties> AmqpMessage::getProperties() [flags=RET_VALUE_ONLY] 
 *hash<auto> app_props = msg.getApplicationProperties();
     @endcode
 
-    @since %amqp 1.0
 */
 *hash<auto> AmqpMessage::getApplicationProperties() [flags=RET_VALUE_ONLY] {
     return msg->getApplicationProperties(xsink);
@@ -172,7 +166,6 @@ hash<AmqpMessageProperties> AmqpMessage::getProperties() [flags=RET_VALUE_ONLY] 
 *string ct = msg.getContentType();
     @endcode
 
-    @since %amqp 1.0
 */
 *string AmqpMessage::getContentType() [flags=RET_VALUE_ONLY] {
     return msg->getContentType(xsink);
@@ -186,7 +179,6 @@ hash<AmqpMessageProperties> AmqpMessage::getProperties() [flags=RET_VALUE_ONLY] 
 auto id = msg.getMessageId();
     @endcode
 
-    @since %amqp 1.0
 */
 auto AmqpMessage::getMessageId() [flags=RET_VALUE_ONLY] {
     return msg->getMessageId(xsink);
@@ -200,7 +192,6 @@ auto AmqpMessage::getMessageId() [flags=RET_VALUE_ONLY] {
 auto cid = msg.getCorrelationId();
     @endcode
 
-    @since %amqp 1.0
 */
 auto AmqpMessage::getCorrelationId() [flags=RET_VALUE_ONLY] {
     return msg->getCorrelationId(xsink);
@@ -214,7 +205,6 @@ auto AmqpMessage::getCorrelationId() [flags=RET_VALUE_ONLY] {
 *string reply_to = msg.getReplyTo();
     @endcode
 
-    @since %amqp 1.0
 */
 *string AmqpMessage::getReplyTo() [flags=RET_VALUE_ONLY] {
     return msg->getReplyTo(xsink);
@@ -228,7 +218,6 @@ auto AmqpMessage::getCorrelationId() [flags=RET_VALUE_ONLY] {
 *string subj = msg.getSubject();
     @endcode
 
-    @since %amqp 1.0
 */
 *string AmqpMessage::getSubject() [flags=RET_VALUE_ONLY] {
     return msg->getSubject(xsink);
@@ -255,7 +244,6 @@ if (msg) {
 }
     @endcode
 
-    @since %amqp 1.0
 */
 *binary AmqpMessage::getDeliveryTag() [flags=CONSTANT] {
     return msg->getDeliveryTag();

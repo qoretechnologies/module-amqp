@@ -42,7 +42,6 @@ if (msg) {
 client.close();
     @endcode
 
-    @since AmqpUtil 1.0
 */
 public class AmqpClient {
     private {
@@ -62,7 +61,6 @@ public class AmqpClient {
 
         @throw AMQP-CONNECTION-ERROR if the options are invalid
 
-        @since AmqpUtil 1.0
     */
     constructor(string url, *hash<auto> options) {
         hash<AmqpConnectionOptions> opts = cast<hash<AmqpConnectionOptions>>(options ?? {});
@@ -75,7 +73,6 @@ public class AmqpClient {
 
         @throw AMQP-CONNECTION-ERROR if the options are invalid
 
-        @since AmqpUtil 1.0
     */
     constructor(hash<AmqpConnectionOptions> options) {
         m_conn = new AmqpConnection(options);
@@ -84,7 +81,6 @@ public class AmqpClient {
     #! Connect to the AMQP broker
     /** @throw AMQP-CONNECTION-ERROR if the connection fails
 
-        @since AmqpUtil 1.0
     */
     connect() {
         m_conn.connect();
@@ -102,16 +98,44 @@ public class AmqpClient {
     #! Returns True if connected
     /** @return True if the connection is open
 
-        @since AmqpUtil 1.0
     */
     bool isConnected() {
         return m_conn.isConnected();
     }
 
+    #! Close a sender link by address
+    /** @param address the address whose sender to close
+
+    */
+    closeSender(string address) {
+        *string sender = remove m_senders{address};
+        if (sender) {
+            m_conn.closeSender(sender);
+        }
+    }
+
+    #! Close a receiver link by address
+    /** @param address the address whose receiver to close
+
+    */
+    closeReceiver(string address) {
+        *string receiver = remove m_receivers{address};
+        if (receiver) {
+            m_conn.closeReceiver(receiver);
+        }
+    }
+
+    #! Returns connection statistics
+    /** @return connection statistics hash
+
+    */
+    hash<AmqpConnectionStats> getStatistics() {
+        return m_conn.getStatistics();
+    }
+
     #! Get the underlying AmqpConnection object
     /** @return the underlying connection
 
-        @since AmqpUtil 1.0
     */
     AmqpConnection getConnection() {
         return m_conn;
@@ -130,7 +154,6 @@ public class AmqpClient {
         @throw AMQP-CONNECTION-ERROR if not connected
         @throw AMQP-SEND-ERROR if the send fails
 
-        @since AmqpUtil 1.0
     */
     hash<AmqpDeliveryInfo> send(string address, auto body,
             *hash<AmqpMessageProperties> properties, *hash<AmqpSendOptions> opts) {
@@ -145,7 +168,6 @@ public class AmqpClient {
 
         @return delivery information
 
-        @since AmqpUtil 1.0
     */
     hash<AmqpDeliveryInfo> sendMessage(string address, AmqpMessage msg,
             *hash<AmqpSendOptions> opts) {
@@ -163,7 +185,6 @@ public class AmqpClient {
 
         @throw AMQP-CONNECTION-ERROR if not connected
 
-        @since AmqpUtil 1.0
     */
     *AmqpMessage receive(string address, timeout timeout) {
         string receiver = getOrCreateReceiver(address);
@@ -173,7 +194,6 @@ public class AmqpClient {
     #! Accept a delivered message
     /** @param delivery_tag the delivery tag from the message
 
-        @since AmqpUtil 1.0
     */
     accept(binary delivery_tag) {
         m_conn.accept(delivery_tag);
@@ -182,7 +202,6 @@ public class AmqpClient {
     #! Reject a delivered message
     /** @param delivery_tag the delivery tag from the message
 
-        @since AmqpUtil 1.0
     */
     reject(binary delivery_tag) {
         m_conn.reject(delivery_tag);
@@ -191,7 +210,6 @@ public class AmqpClient {
     #! Release a delivered message for redelivery
     /** @param delivery_tag the delivery tag from the message
 
-        @since AmqpUtil 1.0
     */
     release(binary delivery_tag) {
         m_conn.release(delivery_tag);
@@ -203,7 +221,6 @@ public class AmqpClient {
         @param undeliverable if True, do not redeliver to this consumer
         @param annotations optional annotations to add
 
-        @since AmqpUtil 1.0
     */
     modify(binary delivery_tag, bool failed, bool undeliverable,
             *hash<auto> annotations) {
@@ -216,7 +233,6 @@ public class AmqpClient {
 
         @return a new AmqpProducer
 
-        @since AmqpUtil 1.0
     */
     AmqpProducer createProducer(string address, *hash<AmqpSendOptions> opts) {
         string sender = getOrCreateSender(address);
@@ -230,7 +246,6 @@ public class AmqpClient {
 
         @return a new AmqpConsumer
 
-        @since AmqpUtil 1.0
     */
     AmqpConsumer createConsumer(string address, *hash<AmqpReceiveOptions> opts,
             *hash<AmqpFilterOptions> filter) {
@@ -252,7 +267,6 @@ public class AmqpClient {
 
         @return a new AmqpConsumer with durable subscription
 
-        @since AmqpUtil 1.0
     */
     AmqpConsumer createDurableConsumer(string address, string subscription_name,
             *hash<AmqpReceiveOptions> opts, *hash<AmqpFilterOptions> filter) {
@@ -264,7 +278,6 @@ public class AmqpClient {
     #! Get a management client for broker introspection
     /** @return a new AmqpManagementClient
 
-        @since AmqpUtil 1.0
     */
     AmqpManagementClient getManagementClient() {
         return new AmqpManagementClient(m_conn);
@@ -273,7 +286,6 @@ public class AmqpClient {
     #! Begin a transaction
     /** @throw AMQP-TRANSACTION-ERROR if a transaction is already active
 
-        @since AmqpUtil 1.0
     */
     beginTransaction() {
         m_conn.beginTransaction();
@@ -282,7 +294,6 @@ public class AmqpClient {
     #! Commit the current transaction
     /** @throw AMQP-TRANSACTION-ERROR if no transaction is active
 
-        @since AmqpUtil 1.0
     */
     commitTransaction() {
         m_conn.commitTransaction();
@@ -291,7 +302,6 @@ public class AmqpClient {
     #! Rollback the current transaction
     /** @throw AMQP-TRANSACTION-ERROR if no transaction is active
 
-        @since AmqpUtil 1.0
     */
     rollbackTransaction() {
         m_conn.rollbackTransaction();
@@ -300,7 +310,6 @@ public class AmqpClient {
     #! Check if a transaction is active
     /** @return True if a transaction is active
 
-        @since AmqpUtil 1.0
     */
     bool inTransaction() {
         return m_conn.inTransaction();

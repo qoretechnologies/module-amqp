@@ -129,6 +129,12 @@ public:
     //! Check if a transaction is active
     DLLLOCAL bool inTransaction() const;
 
+    //! Close a sender link
+    DLLLOCAL void closeSender(const char* sender_name, ExceptionSink* xsink);
+
+    //! Close a receiver link
+    DLLLOCAL void closeReceiver(const char* receiver_name, ExceptionSink* xsink);
+
     //! Create a durable receiver
     DLLLOCAL QoreStringNode* createDurableReceiver(const char* address,
         const char* subscription_name, const QoreHashNode* opts,
@@ -151,6 +157,9 @@ public:
 
     //! Get info about a specific queue
     DLLLOCAL QoreHashNode* getQueueInfo(const char* queue, ExceptionSink* xsink);
+
+    //! Get connection statistics
+    DLLLOCAL QoreHashNode* getStatistics(ExceptionSink* xsink);
 
 private:
     //! The messaging handler that receives proton events
@@ -318,6 +327,14 @@ private:
         proton::binary tag;
     };
     std::map<std::string, SendResult> send_results_;
+
+    // Connection statistics
+    std::atomic<int64> messages_sent_{0};
+    std::atomic<int64> messages_received_{0};
+    std::atomic<int64> bytes_sent_{0};
+    std::atomic<int64> bytes_received_{0};
+    std::atomic<int64> errors_{0};
+    int64 connected_since_epoch_us_ = 0;  // microseconds since epoch, 0 if not connected
 
     // Transaction state
     std::mutex txn_mutex_;

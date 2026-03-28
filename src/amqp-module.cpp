@@ -58,6 +58,7 @@ const TypedHashDecl* hashdeclAmqpFilterOptions = nullptr;
 const TypedHashDecl* hashdeclAmqpMessageProperties = nullptr;
 const TypedHashDecl* hashdeclAmqpAddressInfo = nullptr;
 const TypedHashDecl* hashdeclAmqpQueueInfo = nullptr;
+const TypedHashDecl* hashdeclAmqpConnectionStats = nullptr;
 
 QoreNamespace AmqpNs("Qore::Amqp");
 
@@ -73,6 +74,7 @@ static void amqp_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     hashdeclAmqpFilterOptions = init_hashdecl_AmqpFilterOptions(AmqpNs);
     hashdeclAmqpAddressInfo = init_hashdecl_AmqpAddressInfo(AmqpNs);
     hashdeclAmqpQueueInfo = init_hashdecl_AmqpQueueInfo(AmqpNs);
+    hashdeclAmqpConnectionStats = init_hashdecl_AmqpConnectionStats(AmqpNs);
 
     // Initialize classes
     AmqpNs.addSystemClass(initAmqpMessageClass(AmqpNs));

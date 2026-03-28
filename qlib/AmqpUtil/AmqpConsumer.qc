@@ -41,7 +41,6 @@ while (*AmqpMessage msg = consumer.receive(5s)) {
 client.close();
     @endcode
 
-    @since AmqpUtil 1.0
 */
 public class AmqpConsumer {
     private {
@@ -60,7 +59,6 @@ public class AmqpConsumer {
         @param receiver the receiver link name
         @param subscription_name optional durable subscription name
 
-        @since AmqpUtil 1.0
     */
     constructor(AmqpConnection conn, string receiver, *string subscription_name) {
         m_conn = conn;
@@ -73,7 +71,6 @@ public class AmqpConsumer {
 
         @return the received message, or NOTHING on timeout
 
-        @since AmqpUtil 1.0
     */
     *AmqpMessage receive(timeout timeout) {
         return m_conn.receive(m_receiver, timeout);
@@ -82,7 +79,6 @@ public class AmqpConsumer {
     #! Accept a delivered message
     /** @param delivery_tag the delivery tag
 
-        @since AmqpUtil 1.0
     */
     accept(binary delivery_tag) {
         m_conn.accept(delivery_tag);
@@ -91,7 +87,6 @@ public class AmqpConsumer {
     #! Reject a delivered message
     /** @param delivery_tag the delivery tag
 
-        @since AmqpUtil 1.0
     */
     reject(binary delivery_tag) {
         m_conn.reject(delivery_tag);
@@ -100,7 +95,6 @@ public class AmqpConsumer {
     #! Release a delivered message for redelivery
     /** @param delivery_tag the delivery tag
 
-        @since AmqpUtil 1.0
     */
     release(binary delivery_tag) {
         m_conn.release(delivery_tag);
@@ -112,11 +106,17 @@ public class AmqpConsumer {
         @param undeliverable if True, do not redeliver to this consumer
         @param annotations optional annotations to add
 
-        @since AmqpUtil 1.0
     */
     modify(binary delivery_tag, bool failed, bool undeliverable,
             *hash<auto> annotations) {
         m_conn.modify(delivery_tag, failed, undeliverable, annotations);
+    }
+
+    #! Close the consumer's receiver link
+    /**
+    */
+    close() {
+        m_conn.closeReceiver(m_receiver);
     }
 
     #! Close a durable receiver without unsubscribing
@@ -124,7 +124,6 @@ public class AmqpConsumer {
 
         @throw AMQP-CONSUMER-ERROR if this is not a durable consumer
 
-        @since AmqpUtil 1.0
     */
     closeDurable() {
         if (!m_subscription_name) {
@@ -136,7 +135,6 @@ public class AmqpConsumer {
     #! Permanently remove the durable subscription from the broker
     /** @throw AMQP-CONSUMER-ERROR if this is not a durable consumer
 
-        @since AmqpUtil 1.0
     */
     unsubscribe() {
         if (!m_subscription_name) {
@@ -148,7 +146,6 @@ public class AmqpConsumer {
     #! Check if this is a durable consumer
     /** @return True if this consumer has a durable subscription
 
-        @since AmqpUtil 1.0
     */
     bool isDurable() {
         return exists m_subscription_name;
@@ -157,7 +154,6 @@ public class AmqpConsumer {
     #! Get the receiver link name
     /** @return the receiver link name
 
-        @since AmqpUtil 1.0
     */
     string getReceiverName() {
         return m_receiver;
@@ -166,7 +162,6 @@ public class AmqpConsumer {
     #! Get the durable subscription name
     /** @return the subscription name, or NOTHING if not durable
 
-        @since AmqpUtil 1.0
     */
     *string getSubscriptionName() {
         return m_subscription_name;

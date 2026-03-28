@@ -39,7 +39,6 @@ producer.send({"key": "value"}, <AmqpMessageProperties>{"content_type": "applica
 client.close();
     @endcode
 
-    @since AmqpUtil 1.0
 */
 public class AmqpProducer {
     private {
@@ -58,7 +57,6 @@ public class AmqpProducer {
         @param sender the sender link name
         @param opts default send options applied to all messages
 
-        @since AmqpUtil 1.0
     */
     constructor(AmqpConnection conn, string sender, *hash<AmqpSendOptions> opts) {
         m_conn = conn;
@@ -73,7 +71,6 @@ public class AmqpProducer {
 
         @return delivery information
 
-        @since AmqpUtil 1.0
     */
     hash<AmqpDeliveryInfo> send(auto body, *hash<AmqpMessageProperties> properties,
             *hash<AmqpSendOptions> opts) {
@@ -86,16 +83,21 @@ public class AmqpProducer {
 
         @return delivery information
 
-        @since AmqpUtil 1.0
     */
     hash<AmqpDeliveryInfo> sendMessage(AmqpMessage msg, *hash<AmqpSendOptions> opts) {
         return m_conn.send(m_sender, msg, opts ?? m_opts);
     }
 
+    #! Close the producer's sender link
+    /**
+    */
+    close() {
+        m_conn.closeSender(m_sender);
+    }
+
     #! Get the sender link name
     /** @return the sender link name
 
-        @since AmqpUtil 1.0
     */
     string getSenderName() {
         return m_sender;

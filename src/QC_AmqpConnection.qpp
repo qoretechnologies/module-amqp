@@ -179,7 +179,6 @@ hashdecl Qore::Amqp::AmqpFilterOptions {
 //! Information about an AMQP address
 /** Returned by management protocol queries.
 
-    @since %amqp 1.0
 */
 hashdecl Qore::Amqp::AmqpAddressInfo {
     //! The address name
@@ -198,7 +197,6 @@ hashdecl Qore::Amqp::AmqpAddressInfo {
 //! Information about an AMQP queue
 /** Returned by management protocol queries.
 
-    @since %amqp 1.0
 */
 hashdecl Qore::Amqp::AmqpQueueInfo {
     //! The queue name
@@ -221,6 +219,32 @@ hashdecl Qore::Amqp::AmqpQueueInfo {
 
     //! Filter expression applied to the queue (if any)
     *string filter;
+}
+
+//! Connection statistics
+/** @since %amqp 1.0
+*/
+hashdecl Qore::Amqp::AmqpConnectionStats {
+    //! Total messages sent
+    int messages_sent;
+
+    //! Total messages received
+    int messages_received;
+
+    //! Total bytes sent
+    int bytes_sent;
+
+    //! Total bytes received
+    int bytes_received;
+
+    //! Total error count
+    int errors;
+
+    //! Number of active sender and receiver links
+    int link_count;
+
+    //! Timestamp when the connection was established (NOTHING if not connected)
+    *date connected_since;
 }
 
 //! The AmqpConnection class provides AMQP 1.0 messaging using Qpid Proton
@@ -252,7 +276,6 @@ conn.send(sender, new AmqpMessage("transacted message"));
 conn.commitTransaction();
     @endcode
 
-    @since %amqp 1.0
 */
 qclass AmqpConnection [arg=QoreAmqpConnection* conn; ns=Qore::Amqp; dom=NETWORK];
 
@@ -269,7 +292,6 @@ AmqpConnection conn(<AmqpConnectionOptions>{
 });
     @endcode
 
-    @since %amqp 1.0
 */
 AmqpConnection::constructor(hash<AmqpConnectionOptions> options) {
     self->setPrivate(CID_AMQPCONNECTION, new QoreAmqpConnection(options, xsink));
@@ -283,7 +305,6 @@ AmqpConnection::constructor(hash<AmqpConnectionOptions> options) {
 conn.connect();
     @endcode
 
-    @since %amqp 1.0
 */
 nothing AmqpConnection::connect() [dom=NETWORK] {
     conn->connect(xsink);
@@ -295,7 +316,6 @@ nothing AmqpConnection::connect() [dom=NETWORK] {
 conn.close();
     @endcode
 
-    @since %amqp 1.0
 */
 nothing AmqpConnection::close() {
     conn->close(xsink);
@@ -311,7 +331,6 @@ if (conn.isConnected()) {
 }
     @endcode
 
-    @since %amqp 1.0
 */
 bool AmqpConnection::isConnected() [flags=CONSTANT] {
     return conn->isConnected();
@@ -331,7 +350,6 @@ bool AmqpConnection::isConnected() [flags=CONSTANT] {
 string sender = conn.createSender("my-queue");
     @endcode
 
-    @since %amqp 1.0
 */
 string AmqpConnection::createSender(string address, *hash<auto> opts) [dom=NETWORK] {
     return conn->createSender(address->c_str(), opts, xsink);
@@ -351,10 +369,41 @@ string AmqpConnection::createSender(string address, *hash<auto> opts) [dom=NETWO
 string receiver = conn.createReceiver("my-queue");
     @endcode
 
-    @since %amqp 1.0
 */
 string AmqpConnection::createReceiver(string address, *hash<AmqpReceiveOptions> opts) [dom=NETWORK] {
     return conn->createReceiver(address->c_str(), opts, nullptr, xsink);
+}
+
+//! Closes a sender link
+/** @param sender_name the sender link name to close
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-SENDER-ERROR if the sender is not found
+
+    @par Example:
+    @code{.py}
+conn.closeSender(sender);
+    @endcode
+
+*/
+nothing AmqpConnection::closeSender(string sender_name) {
+    conn->closeSender(sender_name->c_str(), xsink);
+}
+
+//! Closes a receiver link
+/** @param receiver_name the receiver link name to close
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-RECEIVER-ERROR if the receiver is not found
+
+    @par Example:
+    @code{.py}
+conn.closeReceiver(receiver);
+    @endcode
+
+*/
+nothing AmqpConnection::closeReceiver(string receiver_name) {
+    conn->closeReceiver(receiver_name->c_str(), xsink);
 }
 
 //! Sends a message using the named sender
@@ -372,7 +421,6 @@ string AmqpConnection::createReceiver(string address, *hash<AmqpReceiveOptions> 
 hash<AmqpDeliveryInfo> info = conn.send(sender, new AmqpMessage("Hello!"));
     @endcode
 
-    @since %amqp 1.0
 */
 hash<AmqpDeliveryInfo> AmqpConnection::send(string sender, AmqpMessage[QoreAmqpMessage] msg, *hash<AmqpSendOptions> opts) [dom=NETWORK] {
     return conn->send(sender->c_str(), **msg, opts, xsink);
@@ -399,7 +447,6 @@ if (msg) {
 }
     @endcode
 
-    @since %amqp 1.0
 */
 *AmqpMessage AmqpConnection::receive(string receiver, timeout timeout) [dom=NETWORK] {
     return conn->receive(self, receiver->c_str(), timeout, xsink);
@@ -416,7 +463,6 @@ if (msg) {
 conn.accept(delivery_tag);
     @endcode
 
-    @since %amqp 1.0
 */
 nothing AmqpConnection::accept(binary delivery_tag) {
     conn->accept(delivery_tag, xsink);
@@ -433,7 +479,6 @@ nothing AmqpConnection::accept(binary delivery_tag) {
 conn.reject(delivery_tag);
     @endcode
 
-    @since %amqp 1.0
 */
 nothing AmqpConnection::reject(binary delivery_tag) {
     conn->reject(delivery_tag, xsink);
@@ -450,7 +495,6 @@ nothing AmqpConnection::reject(binary delivery_tag) {
 conn.release(delivery_tag);
     @endcode
 
-    @since %amqp 1.0
 */
 nothing AmqpConnection::release(binary delivery_tag) {
     conn->release(delivery_tag, xsink);
@@ -470,7 +514,6 @@ nothing AmqpConnection::release(binary delivery_tag) {
 conn.modify(delivery_tag, True, False);
     @endcode
 
-    @since %amqp 1.0
 */
 nothing AmqpConnection::modify(binary delivery_tag, bool failed, bool undeliverable, *hash<auto> annotations) {
     conn->modify(delivery_tag, failed, undeliverable, annotations, xsink);
@@ -487,7 +530,6 @@ conn.send(sender, new AmqpMessage("transacted"));
 conn.commitTransaction();
     @endcode
 
-    @since %amqp 1.0
 */
 nothing AmqpConnection::beginTransaction() [dom=NETWORK] {
     conn->beginTransaction(xsink);
@@ -502,7 +544,6 @@ nothing AmqpConnection::beginTransaction() [dom=NETWORK] {
 conn.commitTransaction();
     @endcode
 
-    @since %amqp 1.0
 */
 nothing AmqpConnection::commitTransaction() [dom=NETWORK] {
     conn->commitTransaction(xsink);
@@ -517,7 +558,6 @@ nothing AmqpConnection::commitTransaction() [dom=NETWORK] {
 conn.rollbackTransaction();
     @endcode
 
-    @since %amqp 1.0
 */
 nothing AmqpConnection::rollbackTransaction() [dom=NETWORK] {
     conn->rollbackTransaction(xsink);
@@ -533,7 +573,6 @@ if (conn.inTransaction()) {
 }
     @endcode
 
-    @since %amqp 1.0
 */
 bool AmqpConnection::inTransaction() [flags=CONSTANT] {
     return conn->inTransaction();
@@ -555,7 +594,6 @@ bool AmqpConnection::inTransaction() [flags=CONSTANT] {
 string receiver = conn.createDurableReceiver("topic/news", "my-durable-sub");
     @endcode
 
-    @since %amqp 1.0
 */
 string AmqpConnection::createDurableReceiver(string address, string subscription_name, *hash<AmqpReceiveOptions> opts, *hash<AmqpFilterOptions> filter) [dom=NETWORK] {
     return conn->createDurableReceiver(address->c_str(), subscription_name->c_str(), opts, filter, xsink);
@@ -574,7 +612,6 @@ string AmqpConnection::createDurableReceiver(string address, string subscription
 conn.closeDurableReceiver(receiver);
     @endcode
 
-    @since %amqp 1.0
 */
 nothing AmqpConnection::closeDurableReceiver(string receiver_name) {
     conn->closeDurableReceiver(receiver_name->c_str(), xsink);
@@ -591,7 +628,6 @@ nothing AmqpConnection::closeDurableReceiver(string receiver_name) {
 conn.unsubscribeDurable("my-durable-sub");
     @endcode
 
-    @since %amqp 1.0
 */
 nothing AmqpConnection::unsubscribeDurable(string subscription_name) [dom=NETWORK] {
     conn->unsubscribeDurable(subscription_name->c_str(), xsink);
@@ -610,7 +646,6 @@ for (hash<AmqpAddressInfo> addr in addresses) {
 }
     @endcode
 
-    @since %amqp 1.0
 */
 list<hash<AmqpAddressInfo>> AmqpConnection::queryAddresses() [dom=NETWORK] {
     return conn->queryAddresses(xsink);
@@ -628,7 +663,6 @@ list<hash<AmqpAddressInfo>> AmqpConnection::queryAddresses() [dom=NETWORK] {
 list<hash<AmqpQueueInfo>> queues = conn.queryQueues("my-address");
     @endcode
 
-    @since %amqp 1.0
 */
 list<hash<AmqpQueueInfo>> AmqpConnection::queryQueues(*string address) [dom=NETWORK] {
     return conn->queryQueues(address ? address->c_str() : nullptr, xsink);
@@ -646,7 +680,6 @@ list<hash<AmqpQueueInfo>> AmqpConnection::queryQueues(*string address) [dom=NETW
 *hash<auto> info = conn.getAddressInfo("my-address");
     @endcode
 
-    @since %amqp 1.0
 */
 *hash<auto> AmqpConnection::getAddressInfo(string address) [dom=NETWORK] {
     return conn->getAddressInfo(address->c_str(), xsink);
@@ -664,8 +697,21 @@ list<hash<AmqpQueueInfo>> AmqpConnection::queryQueues(*string address) [dom=NETW
 *hash<auto> info = conn.getQueueInfo("my-queue");
     @endcode
 
-    @since %amqp 1.0
 */
 *hash<auto> AmqpConnection::getQueueInfo(string queue) [dom=NETWORK] {
     return conn->getQueueInfo(queue->c_str(), xsink);
+}
+
+//! Returns connection statistics
+/** @return connection statistics including message counts, byte counts, and connection uptime
+
+    @par Example:
+    @code{.py}
+hash<AmqpConnectionStats> stats = conn.getStatistics();
+printf("Sent: %d messages, %d bytes\n", stats.messages_sent, stats.bytes_sent);
+    @endcode
+
+*/
+hash<AmqpConnectionStats> AmqpConnection::getStatistics() [flags=RET_VALUE_ONLY] {
+    return conn->getStatistics(xsink);
 }
