@@ -1864,8 +1864,10 @@ void QoreAmqpConnection::beginTransaction(ExceptionSink* xsink) {
             pn_terminus_set_type(pn_link_target(c_link), PN_COORDINATOR);
             pn_link_open(c_link);
             txn_coordinator_link_ = c_link;
-            fprintf(stderr, "DEBUG coordinator created: link=%p sess=%p name='%s'\n",
-                (void*)c_link, (void*)c_sess, pn_link_name(c_link));
+            pn_terminus_type_t ttype = pn_terminus_get_type(pn_link_target(c_link));
+            fprintf(stderr, "DEBUG coordinator created: link=%p sess=%p name='%s' target_type=%d (expect %d=COORDINATOR)\n",
+                (void*)c_link, (void*)c_sess, pn_link_name(c_link),
+                (int)ttype, (int)PN_COORDINATOR);
         } catch (const std::exception& e) {
             link_error = e.what();
         }
