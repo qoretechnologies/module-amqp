@@ -157,6 +157,12 @@ hashdecl Qore::Amqp::AmqpReceiveOptions {
 
     //! Durable subscription name (for durable subscriptions)
     *string durable_name;
+
+    //! Create a shared subscription (multiple consumers share the same queue)
+    *bool shared;
+
+    //! Make the shared subscription global (shared across connections, not just sessions)
+    *bool global;
 }
 
 //! Options for message filtering on a receiver
@@ -424,6 +430,30 @@ hash<AmqpDeliveryInfo> info = conn.send(sender, new AmqpMessage("Hello!"));
 */
 hash<AmqpDeliveryInfo> AmqpConnection::send(string sender, AmqpMessage[QoreAmqpMessage] msg, *hash<AmqpSendOptions> opts) [dom=NETWORK] {
     return conn->send(sender->c_str(), **msg, opts, xsink);
+}
+
+//! Sends a batch of messages efficiently
+/** All messages are queued in a single event loop iteration, then confirmations
+    are awaited as a batch. Significantly faster than individual send() calls for
+    bulk publishing.
+
+    @param sender the sender link name
+    @param msgs list of AmqpMessage objects to send
+    @param opts optional send options applied to all messages
+
+    @return a list of delivery info hashes, one per message
+
+    @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-SEND-ERROR if any message fails to send
+
+    @par Example:
+    @code{.py}
+list<AmqpMessage> batch = map new AmqpMessage(sprintf("msg-%d", $1)), xrange(100);
+list<hash<AmqpDeliveryInfo>> results = conn.sendBatch(sender, batch);
+    @endcode
+*/
+list<hash<AmqpDeliveryInfo>> AmqpConnection::sendBatch(string sender, list<AmqpMessage> msgs, *hash<AmqpSendOptions> opts) [dom=NETWORK] {
+    return conn->sendBatch(sender->c_str(), msgs, opts, xsink);
 }
 
 //! Receives a message from the named receiver

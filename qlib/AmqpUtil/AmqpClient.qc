@@ -229,6 +229,18 @@ public class AmqpClient {
         m_conn.release(delivery_tag);
     }
 
+    #! Send a batch of message bodies to an address
+    /** @param address the AMQP address
+        @param bodies list of message bodies to send
+
+        @return list of delivery info hashes
+    */
+    list<hash<AmqpDeliveryInfo>> sendBatch(string address, list<auto> bodies) {
+        string sender = getOrCreateSender(address);
+        list<AmqpMessage> msgs = map new AmqpMessage($1), bodies;
+        return m_conn.sendBatch(sender, msgs);
+    }
+
     #! Modify a delivered message
     /** @param delivery_tag the delivery tag
         @param failed if True, the message was not processed successfully
@@ -271,6 +283,28 @@ public class AmqpClient {
             receiver = getOrCreateReceiver(address, opts);
         }
         return new AmqpConsumer(m_conn, receiver);
+    }
+
+    #! Create a shared consumer for a specific address
+    /** Multiple consumers with the same subscription name share the message load.
+
+        @param address the AMQP address to consume from
+        @param subscription_name the shared subscription name
+        @param opts optional receiver options (shared is set automatically)
+        @param global if True, the subscription is shared across connections
+
+        @return a new AmqpConsumer with shared subscription
+    */
+    AmqpConsumer createSharedConsumer(string address, string subscription_name,
+            *hash<AmqpReceiveOptions> opts, bool global = False) {
+        hash<AmqpReceiveOptions> ropts = opts ?? <AmqpReceiveOptions>{};
+        ropts.shared = True;
+        if (global) {
+            ropts.global = True;
+        }
+        ropts.durable_name = subscription_name;
+        string receiver = m_conn.createReceiver(address, ropts);
+        return new AmqpConsumer(m_conn, receiver, subscription_name);
     }
 
     #! Create a durable consumer for a specific address

@@ -88,6 +88,16 @@ public class AmqpProducer {
         return m_conn.send(m_sender, msg, opts ?? m_opts);
     }
 
+    #! Send a batch of message bodies
+    /** @param bodies list of message bodies to send
+
+        @return list of delivery info hashes
+    */
+    list<hash<AmqpDeliveryInfo>> sendBatch(list<auto> bodies) {
+        list<AmqpMessage> msgs = map new AmqpMessage($1), bodies;
+        return m_conn.sendBatch(m_sender, msgs, m_opts);
+    }
+
     #! Close the producer's sender link
     /**
     */

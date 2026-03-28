@@ -97,6 +97,9 @@ public class AmqpTest inherits QUnit::Test {
         addTestCase("AmqpConnectionStats hashdecl", \testConnectionStatsHashdecl());
         addTestCase("getStatistics without connection", \testStatsNoConnection());
 
+        # Shared subscription hashdecl
+        addTestCase("AmqpReceiveOptions shared fields", \testReceiveOptionsSharedFields());
+
         # Connection events (no broker needed)
         addTestCase("getConnectionEvents empty initially", \testEventsEmpty());
         addTestCase("setAutoRecoverLinks", \testAutoRecoverLinks());
@@ -610,6 +613,19 @@ public class AmqpTest inherits QUnit::Test {
         assertEq(0, stats.messages_received);
         assertEq(0, stats.link_count);
         assertNothing(stats.connected_since);
+    }
+
+    # --- Shared subscription tests ---
+
+    testReceiveOptionsSharedFields() {
+        hash<AmqpReceiveOptions> opts = <AmqpReceiveOptions>{
+            "shared": True,
+            "global": True,
+            "credit": 10,
+        };
+        assertEq(True, opts.shared);
+        assertEq(True, opts.global);
+        assertEq(10, opts.credit);
     }
 
     # --- Connection events tests ---

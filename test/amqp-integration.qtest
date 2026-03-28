@@ -97,6 +97,13 @@ public class AmqpIntegrationTest inherits QUnit::Test {
         addTestCase("transacted send commit delivers", \testTxnSendCommit());
         addTestCase("transacted send rollback discards", \testTxnSendRollback());
 
+        # Batch send
+        addTestCase("batch send 10 messages", \testBatchSend());
+        addTestCase("batch send empty list", \testBatchSendEmpty());
+
+        # Shared subscriptions
+        addTestCase("shared subscription option", \testSharedSubscription());
+
         # Connection events
         addTestCase("connected event on connect", \testConnectedEvent());
         addTestCase("disconnected event on close", \testDisconnectedEvent());
@@ -665,6 +672,57 @@ public class AmqpIntegrationTest inherits QUnit::Test {
 
         *AmqpMessage msg = conn.receive(receiver, 3s);
         assertNothing(msg);
+    }
+
+    # --- Batch send ---
+
+    testBatchSend() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        # Send 10 messages in batch
+        list<AmqpMessage> batch = ();
+        for (int i = 0; i < 10; ++i) {
+            batch += new AmqpMessage(sprintf("batch-%d", i));
+        }
+        list<hash<AmqpDeliveryInfo>> results = conn.sendBatch(sender, batch);
+        assertEq(10, results.size());
+
+        # Receive all 10
+        for (int i = 0; i < 10; ++i) {
+            *AmqpMessage msg = conn.receive(receiver, 10s);
+            @assert(msg);
+            assertEq(sprintf("batch-%d", i), msg.getBody());
+            conn.accept(msg.getDeliveryTag());
+        }
+    }
+
+    testBatchSendEmpty() {
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender("batch-empty-test");
+        list<hash<AmqpDeliveryInfo>> results = conn.sendBatch(sender, ());
+        assertEq(0, results.size());
+    }
+
+    # --- Shared subscriptions ---
+
+    testSharedSubscription() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        # Create a receiver with shared option — should not throw
+        string receiver = conn.createReceiver(addr, <AmqpReceiveOptions>{
+            "shared": True,
+        });
+        @assert(receiver);
+        conn.closeReceiver(receiver);
     }
 
     # --- Connection events ---

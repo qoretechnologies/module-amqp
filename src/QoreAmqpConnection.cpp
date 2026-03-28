@@ -977,6 +977,8 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
     int credit = 0;
     bool auto_accept = false;
     int prefetch = 0;
+    bool shared = false;
+    bool global = false;
     std::string selector;
 
     if (opts) {
@@ -991,6 +993,14 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
         v = opts->getKeyValue("prefetch");
         if (!v.isNullOrNothing()) {
             prefetch = static_cast<int>(v.getAsBigInt());
+        }
+        v = opts->getKeyValue("shared");
+        if (!v.isNullOrNothing()) {
+            shared = v.getAsBool();
+        }
+        v = opts->getKeyValue("global");
+        if (!v.isNullOrNothing()) {
+            global = v.getAsBool();
         }
     }
 
@@ -1009,11 +1019,23 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
     bool done = false;
     std::string error;
 
-    if (!scheduleWork([&, this]() {
+    if (!scheduleWork([&, this, shared, global]() {
         try {
             proton::receiver_options ro;
             proton::source_options so;
             so.address(addr);
+
+            // Apply shared subscription capabilities
+            if (shared || global) {
+                std::vector<proton::symbol> caps;
+                if (shared) {
+                    caps.push_back(proton::symbol("shared"));
+                }
+                if (global) {
+                    caps.push_back(proton::symbol("global"));
+                }
+                so.capabilities(caps);
+            }
 
             // Apply JMS selector filter if provided
             if (!selector.empty()) {
@@ -1348,6 +1370,212 @@ QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMe
     info->setKeyValue("settled", accepted, xsink);
     info->setKeyValue("state", new QoreStringNode(accepted ? "accepted" : "rejected"), xsink);
     return info.release();
+}
+
+QoreListNode* QoreAmqpConnection::sendBatch(const char* sender_name,
+        const QoreListNode* msgs, const QoreHashNode* opts, ExceptionSink* xsink) {
+    if (!checkConnected(xsink)) {
+        return nullptr;
+    }
+    if (qore_check_cancel(xsink, "AmqpConnection::sendBatch")) {
+        return nullptr;
+    }
+    if (!msgs || !msgs->size()) {
+        return new QoreListNode(hashdeclAmqpDeliveryInfo->getTypeInfo());
+    }
+
+    proton::sender sender;
+    {
+        std::lock_guard<std::mutex> lock(links_mutex_);
+        auto it = senders_.find(sender_name);
+        if (it == senders_.end()) {
+            xsink->raiseException("AMQP-SEND-ERROR", "sender '%s' not found", sender_name);
+            return nullptr;
+        }
+        sender = it->second;
+    }
+
+    // Capture transaction state
+    bool is_transacted = txn_active_.load();
+    proton::binary send_txn_id;
+    if (is_transacted) {
+        std::lock_guard<std::mutex> lock(txn_mutex_);
+        send_txn_id = txn_id_;
+    }
+
+    // Prepare all messages
+    size_t count = msgs->size();
+    std::vector<proton::message> pmsgs(count);
+    for (size_t i = 0; i < count; ++i) {
+        QoreValue v = msgs->retrieveEntry(i);
+        if (v.getType() != NT_OBJECT) {
+            xsink->raiseException("AMQP-SEND-ERROR",
+                "batch element %zu is not an AmqpMessage", i);
+            return nullptr;
+        }
+        QoreObject* obj = v.get<QoreObject>();
+        QoreAmqpMessage* qmsg = static_cast<QoreAmqpMessage*>(
+            obj->getReferencedPrivateData(CID_AMQPMESSAGE, xsink));
+        if (!qmsg) {
+            if (!*xsink) {
+                xsink->raiseException("AMQP-SEND-ERROR",
+                    "batch element %zu is not an AmqpMessage", i);
+            }
+            return nullptr;
+        }
+        try {
+            pmsgs[i] = qmsg->getProtonMessage();
+        } catch (const std::exception& e) {
+            qmsg->deref(xsink);
+            xsink->raiseException("AMQP-SEND-ERROR",
+                "failed to prepare batch message %zu: %s", i, e.what());
+            return nullptr;
+        }
+        qmsg->deref(xsink);
+
+        // Apply send options
+        if (opts) {
+            QoreValue ov = opts->getKeyValue("durable");
+            if (!ov.isNullOrNothing()) {
+                pmsgs[i].durable(ov.getAsBool());
+            }
+            ov = opts->getKeyValue("ttl");
+            if (!ov.isNullOrNothing()) {
+                pmsgs[i].ttl(proton::duration(static_cast<int64_t>(ov.getAsBigInt())));
+            }
+            ov = opts->getKeyValue("priority");
+            if (!ov.isNullOrNothing()) {
+                pmsgs[i].priority(static_cast<uint8_t>(ov.getAsBigInt()));
+            }
+        }
+    }
+
+    // Send all in a single work queue lambda
+    std::vector<std::string> tag_keys(count);
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool send_done = false;
+    std::string error;
+
+    if (!scheduleWork([&, this, is_transacted, send_txn_id]() {
+        try {
+            pn_link_t* c_link = proton_unwrap<pn_link_t>(sender);
+            static std::atomic<int> batch_tag_counter{0};
+
+            for (size_t i = 0; i < count; ++i) {
+                int tag_num = ++batch_tag_counter;
+                std::string dtag = "b-" + std::to_string(tag_num);
+
+                pn_delivery_t* dlv = pn_delivery(c_link,
+                    pn_dtag(dtag.c_str(), dtag.size()));
+
+                if (is_transacted && !send_txn_id.empty()) {
+                    pn_delivery_update(dlv, 0x34);
+                    pn_data_t* disp_data = pn_disposition_data(
+                        pn_delivery_local(dlv));
+                    pn_data_clear(disp_data);
+                    pn_data_put_list(disp_data);
+                    pn_data_enter(disp_data);
+                    pn_data_put_binary(disp_data, pn_bytes(send_txn_id.size(),
+                        reinterpret_cast<const char*>(send_txn_id.data())));
+                    pn_data_exit(disp_data);
+                }
+
+                pn_message_t* c_msg = proton_unwrap<pn_message_t>(pmsgs[i]);
+                pn_rwbytes_t buf = {0, nullptr};
+                ssize_t rc = pn_message_encode2(c_msg, &buf);
+                if (rc < 0) {
+                    free(buf.start);
+                    error = "failed to encode batch message " +
+                        std::to_string(i);
+                    break;
+                }
+                pn_link_send(c_link, buf.start, rc);
+                pn_link_advance(c_link);
+                free(buf.start);
+
+                pn_delivery_tag_t ptag = pn_delivery_tag(dlv);
+                proton::binary tag(ptag.start, ptag.start + ptag.size);
+                std::ostringstream oss;
+                for (uint8_t b : tag) {
+                    oss << std::hex << std::setfill('0') << std::setw(2)
+                        << static_cast<int>(b);
+                }
+                tag_keys[i] = oss.str();
+                {
+                    std::lock_guard<std::mutex> lock(send_mutex_);
+                    send_results_[tag_keys[i]] = SendResult{false, false, "", tag};
+                }
+                bytes_sent_ += rc;
+            }
+        } catch (const std::exception& e) {
+            error = e.what();
+        }
+        std::lock_guard<std::mutex> lock(mtx);
+        send_done = true;
+        cv.notify_all();
+    }, xsink)) {
+        return nullptr;
+    }
+
+    // Wait for sends to be queued
+    {
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait(lock, [&send_done]() { return send_done; });
+    }
+
+    if (!error.empty()) {
+        xsink->raiseException("AMQP-SEND-ERROR", "batch send failed: %s", error.c_str());
+        return nullptr;
+    }
+
+    // Wait for all confirmations
+    {
+        std::unique_lock<std::mutex> lock(send_mutex_);
+        bool confirmed = waitWithCancel(lock, send_cv_, [&, this]() {
+            for (size_t i = 0; i < count; ++i) {
+                auto it = send_results_.find(tag_keys[i]);
+                if (it == send_results_.end() || !it->second.done) {
+                    return false;
+                }
+            }
+            return true;
+        }, 30000, "AmqpConnection::sendBatch", xsink);
+
+        if (*xsink) {
+            return nullptr;
+        }
+
+        // Build result list
+        ReferenceHolder<QoreListNode> result(
+            new QoreListNode(hashdeclAmqpDeliveryInfo->getTypeInfo()), xsink);
+        for (size_t i = 0; i < count; ++i) {
+            auto it = send_results_.find(tag_keys[i]);
+            bool accepted = confirmed && it != send_results_.end() && it->second.accepted;
+            proton::binary dtag;
+            if (it != send_results_.end()) {
+                dtag = it->second.tag;
+                send_results_.erase(it);
+            }
+
+            ReferenceHolder<QoreHashNode> info(
+                new QoreHashNode(hashdeclAmqpDeliveryInfo, xsink), xsink);
+            BinaryNode* tag_node = new BinaryNode;
+            if (!dtag.empty()) {
+                tag_node->append(dtag.data(), dtag.size());
+            }
+            info->setKeyValue("tag", tag_node, xsink);
+            info->setKeyValue("settled", accepted, xsink);
+            info->setKeyValue("state",
+                new QoreStringNode(accepted ? "accepted" : "unknown"), xsink);
+            result->push(info.release(), xsink);
+            messages_sent_ += accepted ? 1 : 0;
+        }
+        if (*xsink) {
+            return nullptr;
+        }
+        return result.release();
+    }
 }
 
 QoreObject* QoreAmqpConnection::receive(QoreObject* self, const char* receiver_name,

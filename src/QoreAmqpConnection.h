@@ -100,6 +100,10 @@ public:
     DLLLOCAL QoreHashNode* send(const char* sender_name, const QoreAmqpMessage& msg,
         const QoreHashNode* opts, ExceptionSink* xsink);
 
+    //! Send a batch of messages
+    DLLLOCAL QoreListNode* sendBatch(const char* sender_name, const QoreListNode* msgs,
+        const QoreHashNode* opts, ExceptionSink* xsink);
+
     //! Receive a message (blocks with cooperative cancellation)
     DLLLOCAL QoreObject* receive(QoreObject* self, const char* receiver_name,
         int64 timeout_ms, ExceptionSink* xsink);
