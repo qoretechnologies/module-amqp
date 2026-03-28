@@ -399,6 +399,30 @@ void QoreAmqpConnection::Handler::on_receiver_open(proton::receiver& r) {
     }
 }
 
+void QoreAmqpConnection::Handler::on_sender_close(proton::sender& s) {
+    pn_link_t* link = proton_unwrap<pn_link_t>(s);
+    if (link == conn_.txn_coordinator_link_) {
+        std::string err = s.error().what();
+        fprintf(stderr, "DEBUG coordinator CLOSED by broker: %s\n", err.c_str());
+        std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
+        conn_.txn_error_ = "coordinator closed by broker: " + err;
+        conn_.txn_coordinator_ready_ = true;  // unblock the wait
+        conn_.txn_cv_.notify_all();
+    }
+}
+
+void QoreAmqpConnection::Handler::on_sender_error(proton::sender& s) {
+    pn_link_t* link = proton_unwrap<pn_link_t>(s);
+    if (link == conn_.txn_coordinator_link_) {
+        std::string err = s.error().what();
+        fprintf(stderr, "DEBUG coordinator ERROR: %s\n", err.c_str());
+        std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
+        conn_.txn_error_ = "coordinator error: " + err;
+        conn_.txn_coordinator_ready_ = true;
+        conn_.txn_cv_.notify_all();
+    }
+}
+
 void QoreAmqpConnection::Handler::on_sendable(proton::sender& s) {
     // Check if this is the transaction coordinator (compare C link pointers)
     pn_link_t* link = proton_unwrap<pn_link_t>(s);

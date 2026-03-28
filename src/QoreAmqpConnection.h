@@ -182,6 +182,8 @@ private:
         void on_connection_close(proton::connection& c) override;
         void on_connection_error(proton::connection& c) override;
         void on_sender_open(proton::sender& s) override;
+        void on_sender_close(proton::sender& s) override;
+        void on_sender_error(proton::sender& s) override;
         void on_receiver_open(proton::receiver& r) override;
         void on_sendable(proton::sender& s) override;
         void on_message(proton::delivery& d, proton::message& m) override;
