@@ -1145,28 +1145,74 @@ QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMe
     bool sent = false;
     std::string error;
 
-    // NOTE: Transacted sends (setting TransactionalState on the TRANSFER frame)
-    // require Proton C API integration that the C++ sender.send() does not support.
-    // Transaction begin/commit/rollback lifecycle is implemented; transacted message
-    // delivery is a future enhancement.
+    // Capture transaction state for the lambda
+    bool is_transacted = txn_active_.load();
+    proton::binary send_txn_id;
+    if (is_transacted) {
+        std::lock_guard<std::mutex> lock(txn_mutex_);
+        send_txn_id = txn_id_;
+    }
 
-    if (!scheduleWork([&, this]() {
+    if (!scheduleWork([&, this, is_transacted, send_txn_id]() {
         try {
-            proton::tracker t = sender.send(pmsg);
+            // Use Proton C API for full control over the delivery — this enables
+            // setting TransactionalState on the TRANSFER frame for transacted sends
+            pn_link_t* c_link = proton_unwrap<pn_link_t>(sender);
+            pn_message_t* c_msg = proton_unwrap<pn_message_t>(pmsg);
 
-            // Extract the delivery tag for tracking
-            proton::binary tag = t.tag();
-            std::ostringstream oss;
-            for (uint8_t b : tag) {
-                oss << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(b);
+            // Generate a unique delivery tag
+            static std::atomic<int> send_tag_counter{0};
+            std::string dtag = "s-" + std::to_string(++send_tag_counter);
+
+            // Create delivery with explicit tag
+            pn_delivery_t* dlv = pn_delivery(c_link,
+                pn_dtag(dtag.c_str(), dtag.size()));
+
+            // If transacted, set TransactionalState on the delivery BEFORE
+            // sending. The Proton transport includes delivery->local state in
+            // the TRANSFER frame when it's set before the link bytes are sent.
+            if (is_transacted && !send_txn_id.empty()) {
+                pn_delivery_update(dlv, 0x34);  // TransactionalState descriptor
+                pn_data_t* disp_data = pn_disposition_data(
+                    pn_delivery_local(dlv));
+                pn_data_clear(disp_data);
+                // TransactionalState fields: list(binary txn-id, *outcome)
+                pn_data_put_list(disp_data);
+                pn_data_enter(disp_data);
+                pn_data_put_binary(disp_data, pn_bytes(send_txn_id.size(),
+                    reinterpret_cast<const char*>(send_txn_id.data())));
+                pn_data_exit(disp_data);
             }
-            tag_key = oss.str();
-            // Register for tracker result
-            {
-                std::lock_guard<std::mutex> lock(send_mutex_);
-                send_results_[tag_key] = SendResult{false, false, "", tag};
+
+            // Encode message to buffer (using dynamic allocation variant)
+            pn_rwbytes_t buf = {0, nullptr};
+            ssize_t rc = pn_message_encode2(c_msg, &buf);
+            if (rc < 0) {
+                free(buf.start);
+                error = "failed to encode message: " +
+                    std::string(pn_error_text(pn_message_error(c_msg)));
+            } else {
+                // Send encoded bytes on the link (uses the current delivery)
+                pn_link_send(c_link, buf.start, rc);
+                pn_link_advance(c_link);
+                free(buf.start);
+
+                // Extract delivery tag for confirmation tracking
+                pn_delivery_tag_t ptag = pn_delivery_tag(dlv);
+                proton::binary tag(ptag.start, ptag.start + ptag.size);
+                std::ostringstream oss;
+                for (uint8_t b : tag) {
+                    oss << std::hex << std::setfill('0') << std::setw(2)
+                        << static_cast<int>(b);
+                }
+                tag_key = oss.str();
+                {
+                    std::lock_guard<std::mutex> lock(send_mutex_);
+                    send_results_[tag_key] = SendResult{false, false, "", tag};
+                }
+                bytes_sent_ += rc;
+                sent = true;
             }
-            sent = true;
         } catch (const std::exception& e) {
             error = e.what();
         }

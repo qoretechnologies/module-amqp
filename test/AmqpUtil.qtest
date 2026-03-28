@@ -456,25 +456,40 @@ public class AmqpUtilTest inherits QUnit::Test {
     }
 
     testClientTxnCommit() {
+        string addr = getUniqueAddress();
         AmqpClient client = getClient();
         on_exit client.close();
 
-        # Full begin/commit lifecycle via AmqpClient
+        # Pre-create sender/receiver so they're on the session before the transaction
+        client.send(addr, "warmup");
+        *AmqpMessage warmup = client.receive(addr, 5s);
+
+        # Transacted send + commit delivers the message
         client.beginTransaction();
-        assertEq(True, client.inTransaction());
+        client.send(addr, "txn-client-commit");
         client.commitTransaction();
-        assertEq(False, client.inTransaction());
+
+        *AmqpMessage msg = client.receive(addr, 10s);
+        @assert(msg);
+        assertEq("txn-client-commit", msg.getBody());
     }
 
     testClientTxnRollback() {
+        string addr = getUniqueAddress();
         AmqpClient client = getClient();
         on_exit client.close();
 
-        # Full begin/rollback lifecycle via AmqpClient
+        # Pre-create sender/receiver
+        client.send(addr, "warmup");
+        *AmqpMessage warmup = client.receive(addr, 5s);
+
+        # Transacted send + rollback discards the message
         client.beginTransaction();
-        assertEq(True, client.inTransaction());
+        client.send(addr, "txn-client-rollback");
         client.rollbackTransaction();
-        assertEq(False, client.inTransaction());
+
+        *AmqpMessage msg = client.receive(addr, 3s);
+        assertNothing(msg);
     }
 
     testClientTxnCommitNoBegin() {

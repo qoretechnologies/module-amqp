@@ -635,17 +635,14 @@ public class AmqpIntegrationTest inherits QUnit::Test {
         string sender = conn.createSender(addr);
         string receiver = conn.createReceiver(addr);
 
-        # Transaction lifecycle with non-transacted send (commit still works)
+        # Send within a transaction and commit — message should be delivered
         conn.beginTransaction();
-        assertEq(True, conn.inTransaction());
+        conn.send(sender, new AmqpMessage("txn-commit-msg"));
         conn.commitTransaction();
-        assertEq(False, conn.inTransaction());
 
-        # Normal send after committed transaction works
-        conn.send(sender, new AmqpMessage("post-txn-msg"));
         *AmqpMessage msg = conn.receive(receiver, 10s);
         @assert(msg);
-        assertEq("post-txn-msg", msg.getBody());
+        assertEq("txn-commit-msg", msg.getBody());
         conn.accept(msg.getDeliveryTag());
     }
 
@@ -657,18 +654,13 @@ public class AmqpIntegrationTest inherits QUnit::Test {
         string sender = conn.createSender(addr);
         string receiver = conn.createReceiver(addr);
 
-        # Transaction lifecycle with rollback
+        # Send within a transaction and rollback — message should NOT be delivered
         conn.beginTransaction();
-        assertEq(True, conn.inTransaction());
+        conn.send(sender, new AmqpMessage("txn-rollback-msg"));
         conn.rollbackTransaction();
-        assertEq(False, conn.inTransaction());
 
-        # Normal send after rollback works
-        conn.send(sender, new AmqpMessage("post-rollback-msg"));
-        *AmqpMessage msg = conn.receive(receiver, 10s);
-        @assert(msg);
-        assertEq("post-rollback-msg", msg.getBody());
-        conn.accept(msg.getDeliveryTag());
+        *AmqpMessage msg = conn.receive(receiver, 3s);
+        assertNothing(msg);
     }
 
     # --- Management protocol ---
