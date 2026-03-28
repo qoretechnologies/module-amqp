@@ -161,6 +161,12 @@ public:
     //! Get connection statistics
     DLLLOCAL QoreHashNode* getStatistics(ExceptionSink* xsink);
 
+    //! Get and drain pending connection events
+    DLLLOCAL QoreListNode* getConnectionEvents(ExceptionSink* xsink);
+
+    //! Set whether links should be automatically recovered on reconnect
+    DLLLOCAL void setAutoRecoverLinks(bool recover);
+
 private:
     //! The messaging handler that receives proton events
     class Handler : public proton::messaging_handler {
@@ -327,6 +333,32 @@ private:
         proton::binary tag;
     };
     std::map<std::string, SendResult> send_results_;
+
+    // Connection event queue (thread-safe, pushed from Proton event thread)
+    struct ConnectionEvent {
+        std::string event_id;
+        std::string error;
+        int64 timestamp_us;  // microseconds since epoch
+    };
+    std::mutex event_mutex_;
+    std::queue<ConnectionEvent> event_queue_;
+    static constexpr size_t MAX_EVENT_QUEUE = 100;
+
+    //! Push a connection event (called from Proton event thread)
+    DLLLOCAL void pushEvent(const std::string& event_id, const std::string& error = "");
+
+    // Link registry for reconnection recovery
+    struct LinkInfo {
+        std::string address;
+        bool is_sender;
+        bool is_durable = false;
+        std::string subscription_name;
+        // Store serializable options for re-creation
+    };
+    std::mutex registry_mutex_;
+    std::vector<LinkInfo> link_registry_;
+    bool was_connected_ = false;  // true if we were ever connected (for reconnect detection)
+    bool auto_recover_links_ = true;
 
     // Connection statistics
     std::atomic<int64> messages_sent_{0};

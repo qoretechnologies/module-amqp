@@ -97,6 +97,10 @@ public class AmqpIntegrationTest inherits QUnit::Test {
         addTestCase("transacted send commit delivers", \testTxnSendCommit());
         addTestCase("transacted send rollback discards", \testTxnSendRollback());
 
+        # Connection events
+        addTestCase("connected event on connect", \testConnectedEvent());
+        addTestCase("disconnected event on close", \testDisconnectedEvent());
+
         # Management protocol
         addTestCase("queryAddresses returns list", \testQueryAddresses());
         addTestCase("queryQueues returns list", \testQueryQueues());
@@ -661,6 +665,39 @@ public class AmqpIntegrationTest inherits QUnit::Test {
 
         *AmqpMessage msg = conn.receive(receiver, 3s);
         assertNothing(msg);
+    }
+
+    # --- Connection events ---
+
+    testConnectedEvent() {
+        AmqpConnection conn(<AmqpConnectionOptions>{"url": url});
+        conn.connect();
+        on_exit conn.close();
+
+        list<hash<auto>> events = conn.getConnectionEvents();
+        assertTrue(events.size() >= 1);
+        # First event should be "amqp-connected"
+        assertEq("amqp-connected", events[0].event);
+        @assert(events[0].timestamp);
+    }
+
+    testDisconnectedEvent() {
+        AmqpConnection conn(<AmqpConnectionOptions>{"url": url});
+        conn.connect();
+        conn.close();
+
+        list<hash<auto>> events = conn.getConnectionEvents();
+        # Should have connected + disconnected events
+        assertTrue(events.size() >= 2);
+        # Find the disconnected event
+        bool found = False;
+        foreach hash<auto> ev in (events) {
+            if (ev.event == "amqp-disconnected") {
+                found = True;
+                break;
+            }
+        }
+        assertTrue(found);
     }
 
     # --- Management protocol ---

@@ -715,3 +715,40 @@ printf("Sent: %d messages, %d bytes\n", stats.messages_sent, stats.bytes_sent);
 hash<AmqpConnectionStats> AmqpConnection::getStatistics() [flags=RET_VALUE_ONLY] {
     return conn->getStatistics(xsink);
 }
+
+//! Returns and drains pending connection lifecycle events
+/** Events are pushed by the connection handler when the connection state changes.
+    Each event is a hash with keys: \c event (string), \c timestamp (date),
+    and optionally \c error (string).
+
+    Event types: \c "amqp-connected", \c "amqp-disconnected", \c "amqp-error",
+    \c "amqp-reconnected"
+
+    @return a list of event hashes (empty if no pending events)
+
+    @par Example:
+    @code{.py}
+list<hash<auto>> events = conn.getConnectionEvents();
+for (hash<auto> ev in events) {
+    printf("Event: %s at %y\n", ev.event, ev.timestamp);
+}
+    @endcode
+*/
+list<hash<auto>> AmqpConnection::getConnectionEvents() [flags=RET_VALUE_ONLY] {
+    return conn->getConnectionEvents(xsink);
+}
+
+//! Sets whether links are automatically recovered after reconnection
+/** When enabled (the default), all senders and receivers are re-created when
+    the connection is re-established after a disconnect.
+
+    @param recover True to enable auto-recovery, False to disable
+
+    @par Example:
+    @code{.py}
+conn.setAutoRecoverLinks(False);  # manual link management
+    @endcode
+*/
+nothing AmqpConnection::setAutoRecoverLinks(bool recover) {
+    conn->setAutoRecoverLinks(recover);
+}

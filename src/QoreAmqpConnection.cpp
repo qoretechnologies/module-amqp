@@ -269,16 +269,58 @@ void QoreAmqpConnection::Handler::on_container_start(proton::container& c) {
 }
 
 void QoreAmqpConnection::Handler::on_connection_open(proton::connection& c) {
+    bool is_reconnect = conn_.was_connected_;
     {
         std::lock_guard<std::mutex> lock(conn_.wq_mutex_);
         conn_.connection_ = c;
         conn_.work_queue_ = &c.work_queue();
     }
     conn_.connected_ = true;
-    // Track connection timestamp (microseconds since epoch)
+    conn_.was_connected_ = true;
     auto now = std::chrono::system_clock::now();
     conn_.connected_since_epoch_us_ = std::chrono::duration_cast<std::chrono::microseconds>(
         now.time_since_epoch()).count();
+
+    if (is_reconnect) {
+        conn_.pushEvent("amqp-reconnected");
+
+        // Recover links if auto_recover_links_ is enabled
+        if (conn_.auto_recover_links_) {
+            std::lock_guard<std::mutex> reg_lock(conn_.registry_mutex_);
+            for (const auto& info : conn_.link_registry_) {
+                try {
+                    if (info.is_sender) {
+                        proton::sender s = conn_.connection_.open_sender(info.address);
+                        std::lock_guard<std::mutex> lock(conn_.links_mutex_);
+                        conn_.senders_[s.name()] = s;
+                    } else if (info.is_durable) {
+                        proton::receiver_options ro;
+                        proton::source_options so;
+                        so.address(info.address);
+                        so.durability_mode(proton::source::UNSETTLED_STATE);
+                        so.expiry_policy(proton::source::NEVER);
+                        ro.source(so);
+                        ro.auto_accept(false);
+                        ro.name(info.subscription_name);
+                        proton::receiver r = conn_.connection_.open_receiver(info.address, ro);
+                        std::lock_guard<std::mutex> lock(conn_.links_mutex_);
+                        conn_.receivers_[r.name()] = r;
+                    } else {
+                        proton::receiver_options ro;
+                        ro.auto_accept(false);
+                        proton::receiver r = conn_.connection_.open_receiver(info.address, ro);
+                        std::lock_guard<std::mutex> lock(conn_.links_mutex_);
+                        conn_.receivers_[r.name()] = r;
+                    }
+                } catch (...) {
+                    // Best-effort recovery — don't fail the reconnect
+                }
+            }
+        }
+    } else {
+        conn_.pushEvent("amqp-connected");
+    }
+
     std::lock_guard<std::mutex> lock(conn_.connect_mutex_);
     conn_.connect_error_.clear();
     conn_.connect_cv_.notify_all();
@@ -287,6 +329,7 @@ void QoreAmqpConnection::Handler::on_connection_open(proton::connection& c) {
 void QoreAmqpConnection::Handler::on_connection_close(proton::connection& c) {
     conn_.connected_ = false;
     conn_.connected_since_epoch_us_ = 0;
+    conn_.pushEvent("amqp-disconnected");
     {
         std::lock_guard<std::mutex> lock(conn_.wq_mutex_);
         conn_.work_queue_ = nullptr;
@@ -312,6 +355,7 @@ void QoreAmqpConnection::Handler::on_connection_close(proton::connection& c) {
 void QoreAmqpConnection::Handler::on_connection_error(proton::connection& c) {
     std::string err = c.error().what();
     conn_.connected_ = false;
+    conn_.pushEvent("amqp-error", err);
 
     {
         std::lock_guard<std::mutex> lock(conn_.connect_mutex_);
@@ -483,6 +527,7 @@ void QoreAmqpConnection::Handler::on_tracker_settle(proton::tracker& t) {
 void QoreAmqpConnection::Handler::on_transport_error(proton::transport& t) {
     std::string err = t.error().what();
     conn_.connected_ = false;
+    conn_.pushEvent("amqp-error", err);
 
     {
         std::lock_guard<std::mutex> lock(conn_.connect_mutex_);
@@ -877,11 +922,15 @@ QoreStringNode* QoreAmqpConnection::createSender(const char* address, const Qore
             so.target(to);
 
             proton::sender s = connection_.open_sender(addr, so);
-            // Use the proton-assigned link name as our key
             name = s.name();
             {
                 std::lock_guard<std::mutex> lock(links_mutex_);
                 senders_[name] = s;
+            }
+            // Register for reconnect recovery
+            {
+                std::lock_guard<std::mutex> lock(registry_mutex_);
+                link_registry_.push_back(LinkInfo{addr, true, false, ""});
             }
         } catch (const std::exception& e) {
             error = e.what();
@@ -994,11 +1043,15 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
             ro.source(so);
 
             proton::receiver r = connection_.open_receiver(addr, ro);
-            // Use the proton-assigned link name as our key
             name = r.name();
             {
                 std::lock_guard<std::mutex> lock(links_mutex_);
                 receivers_[name] = r;
+            }
+            // Register for reconnect recovery
+            {
+                std::lock_guard<std::mutex> lock(registry_mutex_);
+                link_registry_.push_back(LinkInfo{addr, false, false, ""});
             }
         } catch (const std::exception& e) {
             error = e.what();
@@ -1046,6 +1099,17 @@ void QoreAmqpConnection::closeSender(const char* sender_name, ExceptionSink* xsi
         }
         sender = it->second;
         senders_.erase(it);
+    }
+
+    // Remove from link registry
+    {
+        std::lock_guard<std::mutex> lock(registry_mutex_);
+        link_registry_.erase(
+            std::remove_if(link_registry_.begin(), link_registry_.end(),
+                [&sender](const LinkInfo& li) {
+                    return li.is_sender && li.address == sender.target().address();
+                }),
+            link_registry_.end());
     }
 
     scheduleWork([sender]() mutable {
@@ -1777,11 +1841,15 @@ QoreStringNode* QoreAmqpConnection::createDurableReceiver(const char* address,
             ro.name(name);
 
             proton::receiver r = connection_.open_receiver(addr, ro);
-            // Use the proton-assigned link name as our key
             name = r.name();
             {
                 std::lock_guard<std::mutex> lock(links_mutex_);
                 receivers_[name] = r;
+            }
+            // Register for reconnect recovery (durable)
+            {
+                std::lock_guard<std::mutex> lock(registry_mutex_);
+                link_registry_.push_back(LinkInfo{addr, false, true, std::string(subscription_name)});
             }
         } catch (const std::exception& e) {
             error = e.what();
@@ -2176,6 +2244,43 @@ QoreHashNode* QoreAmqpConnection::getStatistics(ExceptionSink* xsink) {
         return nullptr;
     }
     return stats.release();
+}
+
+void QoreAmqpConnection::pushEvent(const std::string& event_id, const std::string& err) {
+    std::lock_guard<std::mutex> lock(event_mutex_);
+    if (event_queue_.size() >= MAX_EVENT_QUEUE) {
+        event_queue_.pop();  // drop oldest
+    }
+    auto now = std::chrono::system_clock::now();
+    int64 ts = std::chrono::duration_cast<std::chrono::microseconds>(
+        now.time_since_epoch()).count();
+    event_queue_.push(ConnectionEvent{event_id, err, ts});
+}
+
+QoreListNode* QoreAmqpConnection::getConnectionEvents(ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> list(new QoreListNode(autoHashTypeInfo), xsink);
+    std::lock_guard<std::mutex> lock(event_mutex_);
+    while (!event_queue_.empty()) {
+        ConnectionEvent& ev = event_queue_.front();
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+        h->setKeyValue("event", new QoreStringNode(ev.event_id), xsink);
+        h->setKeyValue("timestamp",
+            DateTimeNode::makeAbsolute(0, ev.timestamp_us / 1000000,
+                static_cast<int>(ev.timestamp_us % 1000000)), xsink);
+        if (!ev.error.empty()) {
+            h->setKeyValue("error", new QoreStringNode(ev.error), xsink);
+        }
+        list->push(h.release(), xsink);
+        event_queue_.pop();
+    }
+    if (*xsink) {
+        return nullptr;
+    }
+    return list.release();
+}
+
+void QoreAmqpConnection::setAutoRecoverLinks(bool recover) {
+    auto_recover_links_ = recover;
 }
 
 std::string QoreAmqpConnection::generateLinkName(const char* prefix) {

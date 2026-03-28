@@ -133,6 +133,20 @@ public class AmqpClient {
         return m_conn.getStatistics();
     }
 
+    #! Returns and drains pending connection lifecycle events
+    /** @return list of event hashes
+    */
+    list<hash<auto>> getConnectionEvents() {
+        return m_conn.getConnectionEvents();
+    }
+
+    #! Sets whether links are automatically recovered on reconnect
+    /** @param recover True to enable, False to disable (default: True)
+    */
+    setAutoRecoverLinks(bool recover) {
+        m_conn.setAutoRecoverLinks(recover);
+    }
+
     #! Get the underlying AmqpConnection object
     /** @return the underlying connection
 

@@ -97,6 +97,10 @@ public class AmqpTest inherits QUnit::Test {
         addTestCase("AmqpConnectionStats hashdecl", \testConnectionStatsHashdecl());
         addTestCase("getStatistics without connection", \testStatsNoConnection());
 
+        # Connection events (no broker needed)
+        addTestCase("getConnectionEvents empty initially", \testEventsEmpty());
+        addTestCase("setAutoRecoverLinks", \testAutoRecoverLinks());
+
         # Transaction state tests (no broker needed)
         addTestCase("inTransaction initial state", \testInTransactionInitial());
         addTestCase("commit without connection throws", \testCommitWithoutConnection());
@@ -606,6 +610,26 @@ public class AmqpTest inherits QUnit::Test {
         assertEq(0, stats.messages_received);
         assertEq(0, stats.link_count);
         assertNothing(stats.connected_since);
+    }
+
+    # --- Connection events tests ---
+
+    testEventsEmpty() {
+        AmqpConnection conn(<AmqpConnectionOptions>{
+            "url": "amqp://localhost:5672",
+        });
+        list<hash<auto>> events = conn.getConnectionEvents();
+        assertEq(0, events.size());
+    }
+
+    testAutoRecoverLinks() {
+        AmqpConnection conn(<AmqpConnectionOptions>{
+            "url": "amqp://localhost:5672",
+        });
+        # Should not throw
+        conn.setAutoRecoverLinks(False);
+        conn.setAutoRecoverLinks(True);
+        assertTrue(True);
     }
 
     # --- Transaction state tests ---
