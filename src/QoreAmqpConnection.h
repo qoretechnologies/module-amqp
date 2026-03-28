@@ -48,6 +48,14 @@
 #include <proton/ssl.hpp>
 #include <proton/sasl.hpp>
 
+#include <proton/connection.h>
+#include <proton/link.h>
+#include <proton/session.h>
+#include <proton/delivery.h>
+#include <proton/disposition.h>
+#include <proton/terminus.h>
+#include <proton/codec.h>
+
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -313,13 +321,26 @@ private:
 
     // Transaction state
     std::mutex txn_mutex_;
-    bool txn_active_ = false;
+    std::condition_variable txn_cv_;
+    std::atomic<bool> txn_active_{false};
+    pn_link_t* txn_coordinator_link_ = nullptr;  // C-level coordinator sender
+    proton::binary txn_id_;
+    bool txn_coordinator_ready_ = false;  // coordinator has credit
+    bool txn_declare_done_ = false;       // declare response received
+    bool txn_discharge_done_ = false;     // discharge response received
+    std::string txn_error_;
+
+    //! The link name used for the transaction coordinator
+    static constexpr const char* TXN_COORDINATOR_NAME = "txn-coordinator";
+
+    //! Send a Discharge message on the coordinator and wait for confirmation
+    DLLLOCAL void discharge(bool fail, ExceptionSink* xsink);
 
     // Management sender/receiver
     std::mutex mgmt_mutex_;
     proton::sender mgmt_sender_;
     proton::receiver mgmt_receiver_;
-    bool mgmt_initialized_ = false;
+    std::atomic<bool> mgmt_initialized_{false};
 
     //! Generate a unique link name
     DLLLOCAL std::string generateLinkName(const char* prefix);

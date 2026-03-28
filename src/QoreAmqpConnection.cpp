@@ -39,13 +39,176 @@
 #include <proton/transport.hpp>
 #include <proton/message.hpp>
 
+#include <proton/message.h>
+
+#include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <sstream>
 #include <iomanip>
 
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+
+// --- Proton C/C++ interop helper ---
+// Proton C++ types store the underlying C pointer as their first (or only) data member.
+// Polymorphic types (sender, receiver, connection) have a vtable pointer before the
+// data, so the C pointer is at offset sizeof(void*). Non-polymorphic types (tracker,
+// transfer) store the C pointer at offset 0.
+template <typename CType, typename CppType>
+CType* proton_unwrap(const CppType& obj) {
+    CType* ptr;
+    constexpr size_t offset = std::is_polymorphic_v<CppType> ? sizeof(void*) : 0;
+    std::memcpy(&ptr, reinterpret_cast<const char*>(&obj) + offset, sizeof(ptr));
+    return ptr;
+}
+
+// --- Helpers for management response parsing ---
+
+namespace {
+
+// Safely get a string from a Qore hash, empty if missing
+std::string getStringVal(const QoreHashNode* h, const char* key) {
+    QoreValue v = h->getKeyValue(key);
+    if (v.isNullOrNothing()) {
+        return {};
+    }
+    if (v.getType() == NT_STRING) {
+        return v.get<const QoreStringNode>()->c_str();
+    }
+    QoreStringValueHelper str(v);
+    return str->c_str();
+}
+
+// Safely get an int from a Qore hash, default if missing
+int64 getIntVal(const QoreHashNode* h, const char* key, int64 def = 0) {
+    QoreValue v = h->getKeyValue(key);
+    if (v.isNullOrNothing()) {
+        return def;
+    }
+    return v.getAsBigInt();
+}
+
+// Try multiple key names, return first found int
+int64 getIntMulti(const QoreHashNode* h, std::initializer_list<const char*> keys, int64 def = 0) {
+    for (const char* key : keys) {
+        QoreValue v = h->getKeyValue(key);
+        if (!v.isNullOrNothing()) {
+            return v.getAsBigInt();
+        }
+    }
+    return def;
+}
+
+// Safely get a bool from a Qore hash
+bool getBoolVal(const QoreHashNode* h, const char* key, bool def = false) {
+    QoreValue v = h->getKeyValue(key);
+    if (v.isNullOrNothing()) {
+        return def;
+    }
+    return v.getAsBool();
+}
+
+// Extract routing type string from a hash (handles both "routingType" and "routingTypes" list)
+std::string getRoutingType(const QoreHashNode* h) {
+    std::string rt = getStringVal(h, "routingType");
+    if (rt.empty()) {
+        QoreValue rt_val = h->getKeyValue("routingTypes");
+        if (!rt_val.isNullOrNothing() && rt_val.getType() == NT_LIST) {
+            const QoreListNode* rt_list = rt_val.get<const QoreListNode>();
+            if (rt_list->size() > 0) {
+                QoreValue first = rt_list->retrieveEntry(0);
+                if (first.getType() == NT_STRING) {
+                    rt = first.get<const QoreStringNode>()->c_str();
+                }
+            }
+        }
+    }
+    std::transform(rt.begin(), rt.end(), rt.begin(), ::tolower);
+    if (rt.empty()) {
+        rt = "anycast";
+    }
+    return rt;
+}
+
+// Build an AmqpAddressInfo hash from a raw attribute map
+QoreHashNode* buildAddressInfo(const QoreHashNode* entity, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclAmqpAddressInfo, xsink), xsink);
+    info->setKeyValue("name", new QoreStringNode(getStringVal(entity, "name")), xsink);
+    info->setKeyValue("routing_type", new QoreStringNode(getRoutingType(entity)), xsink);
+    info->setKeyValue("queue_count", getIntMulti(entity, {"queueCount", "queue_count"}), xsink);
+    info->setKeyValue("message_count", getIntMulti(entity, {"messageCount", "message_count", "messages"}), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return info.release();
+}
+
+// Build an AmqpQueueInfo hash from a raw attribute map
+QoreHashNode* buildQueueInfo(const QoreHashNode* entity, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclAmqpQueueInfo, xsink), xsink);
+    info->setKeyValue("name", new QoreStringNode(getStringVal(entity, "name")), xsink);
+    info->setKeyValue("address", new QoreStringNode(getStringVal(entity, "address")), xsink);
+    info->setKeyValue("routing_type", new QoreStringNode(getRoutingType(entity)), xsink);
+    info->setKeyValue("durable", getBoolVal(entity, "durable"), xsink);
+    info->setKeyValue("message_count", getIntMulti(entity, {"messageCount", "message_count", "messages"}), xsink);
+    info->setKeyValue("consumer_count", getIntMulti(entity, {"consumerCount", "consumer_count", "consumers"}), xsink);
+
+    std::string filter = getStringVal(entity, "filterString");
+    if (!filter.empty()) {
+        info->setKeyValue("filter", new QoreStringNode(filter), xsink);
+    }
+    if (*xsink) {
+        return nullptr;
+    }
+    return info.release();
+}
+
+// Parse a management QUERY response body — supports row format (list of maps)
+// and raw hash (single entity). Returns entities found.
+template <typename BuildFn>
+QoreListNode* parseQueryResponse(const QoreHashNode* result, const TypedHashDecl* decl,
+        BuildFn build_fn, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> list(new QoreListNode(decl->getTypeInfo()), xsink);
+
+    // Check for "body" key wrapping a list (row format)
+    QoreValue body_val = result->getKeyValue("body");
+    if (!body_val.isNullOrNothing() && body_val.getType() == NT_LIST) {
+        const QoreListNode* body_list = body_val.get<const QoreListNode>();
+        for (size_t i = 0; i < body_list->size(); ++i) {
+            QoreValue elem = body_list->retrieveEntry(i);
+            if (elem.getType() != NT_HASH) {
+                continue;
+            }
+            QoreHashNode* info = build_fn(elem.get<const QoreHashNode>(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (info) {
+                list->push(info, xsink);
+            }
+        }
+        return list.release();
+    }
+
+    // Check if the result itself is a single entity (has a "name" key)
+    QoreValue name_val = result->getKeyValue("name");
+    if (!name_val.isNullOrNothing() && name_val.getType() == NT_STRING) {
+        QoreHashNode* info = build_fn(result, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (info) {
+            list->push(info, xsink);
+        }
+    }
+    // else: unrecognized format, return empty list
+
+    return list.release();
+}
+
+} // anonymous namespace
 
 // --- Handler implementation ---
 
@@ -170,7 +333,13 @@ void QoreAmqpConnection::Handler::on_receiver_open(proton::receiver& r) {
 }
 
 void QoreAmqpConnection::Handler::on_sendable(proton::sender& s) {
-    // Sender has credit — handled in send()
+    // Check if this is the transaction coordinator (compare C link pointers)
+    pn_link_t* link = proton_unwrap<pn_link_t>(s);
+    if (link == conn_.txn_coordinator_link_) {
+        std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
+        conn_.txn_coordinator_ready_ = true;
+        conn_.txn_cv_.notify_all();
+    }
 }
 
 void QoreAmqpConnection::Handler::on_message(proton::delivery& d, proton::message& m) {
@@ -194,7 +363,7 @@ void QoreAmqpConnection::Handler::on_tracker_accept(proton::tracker& t) {
     proton::binary tag = t.tag();
     std::ostringstream oss;
     for (uint8_t b : tag) {
-        oss << std::hex << std::setfill('0') << std::setw(2) << (int)b;
+        oss << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(b);
     }
     std::string tag_key = oss.str();
     {
@@ -212,7 +381,7 @@ void QoreAmqpConnection::Handler::on_tracker_reject(proton::tracker& t) {
     proton::binary tag = t.tag();
     std::ostringstream oss;
     for (uint8_t b : tag) {
-        oss << std::hex << std::setfill('0') << std::setw(2) << (int)b;
+        oss << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(b);
     }
     std::string tag_key = oss.str();
     {
@@ -228,7 +397,80 @@ void QoreAmqpConnection::Handler::on_tracker_reject(proton::tracker& t) {
 }
 
 void QoreAmqpConnection::Handler::on_tracker_settle(proton::tracker& t) {
-    // Clean up tracker entry
+    // Check if this is a transaction coordinator response (by link pointer)
+    proton::sender tracker_sender = t.sender();
+    pn_link_t* tracker_link = proton_unwrap<pn_link_t>(tracker_sender);
+    if (tracker_link == conn_.txn_coordinator_link_) {
+        // Get the pn_delivery_t* directly from the tracker
+        pn_delivery_t* dlv = proton_unwrap<pn_delivery_t>(t);
+        uint64_t state = pn_delivery_remote_state(dlv);
+
+        if (state == 0x33) {
+            // Declared (0x33): extract txn-id from remote disposition data
+            pn_disposition_t* disp = pn_delivery_remote(dlv);
+            pn_data_t* data = pn_disposition_data(disp);
+            bool extracted = false;
+            if (data) {
+                pn_data_rewind(data);
+                // Walk through the data to find a binary value (the txn-id)
+                // The format may be: raw binary, or inside a list, or described
+                while (pn_data_next(data)) {
+                    pn_type_t type = pn_data_type(data);
+                    if (type == PN_BINARY) {
+                        pn_bytes_t bytes = pn_data_get_binary(data);
+                        if (bytes.size > 0) {
+                            std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
+                            conn_.txn_id_.assign(bytes.start, bytes.start + bytes.size);
+                            conn_.txn_declare_done_ = true;
+                            conn_.txn_cv_.notify_all();
+                            extracted = true;
+                            break;
+                        }
+                    } else if (type == PN_LIST || type == PN_DESCRIBED) {
+                        pn_data_enter(data);
+                        continue;
+                    }
+                }
+            }
+            if (!extracted) {
+                // Try getting the delivery tag as fallback txn-id
+                pn_delivery_tag_t tag = pn_delivery_tag(dlv);
+                if (tag.size > 0) {
+                    std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
+                    conn_.txn_id_.assign(tag.start, tag.start + tag.size);
+                    conn_.txn_declare_done_ = true;
+                    conn_.txn_cv_.notify_all();
+                    extracted = true;
+                }
+            }
+            if (!extracted) {
+                std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
+                conn_.txn_error_ = "failed to extract transaction ID from Declared response";
+                conn_.txn_declare_done_ = true;
+                conn_.txn_cv_.notify_all();
+            }
+        } else if (state == PN_ACCEPTED) {
+            // Discharge accepted (commit/rollback succeeded)
+            std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
+            conn_.txn_discharge_done_ = true;
+            conn_.txn_cv_.notify_all();
+        } else if (state == PN_REJECTED) {
+            std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
+            conn_.txn_error_ = "transaction discharge rejected by broker";
+            conn_.txn_discharge_done_ = true;
+            conn_.txn_cv_.notify_all();
+        } else {
+            std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
+            std::ostringstream oss;
+            oss << "unexpected coordinator response state: 0x"
+                << std::hex << state;
+            conn_.txn_error_ = oss.str();
+            conn_.txn_declare_done_ = true;
+            conn_.txn_discharge_done_ = true;
+            conn_.txn_cv_.notify_all();
+        }
+        return;
+    }
 }
 
 void QoreAmqpConnection::Handler::on_transport_error(proton::transport& t) {
@@ -292,17 +534,17 @@ QoreAmqpConnection::QoreAmqpConnection(const QoreHashNode* options, ExceptionSin
     // Extract optional connection parameters
     v = options->getKeyValue("heartbeat");
     if (!v.isNullOrNothing()) {
-        heartbeat_ = (int)v.getAsBigInt();
+        heartbeat_ = static_cast<int>(v.getAsBigInt());
     }
 
     v = options->getKeyValue("idle_timeout");
     if (!v.isNullOrNothing()) {
-        idle_timeout_ = (int)v.getAsBigInt();
+        idle_timeout_ = static_cast<int>(v.getAsBigInt());
     }
 
     v = options->getKeyValue("max_frame_size");
     if (!v.isNullOrNothing()) {
-        max_frame_size_ = (int)v.getAsBigInt();
+        max_frame_size_ = static_cast<int>(v.getAsBigInt());
     }
 
     v = options->getKeyValue("container_id");
@@ -328,12 +570,12 @@ QoreAmqpConnection::QoreAmqpConnection(const QoreHashNode* options, ExceptionSin
 
     v = options->getKeyValue("max_reconnect_attempts");
     if (!v.isNullOrNothing()) {
-        max_reconnect_attempts_ = (int)v.getAsBigInt();
+        max_reconnect_attempts_ = static_cast<int>(v.getAsBigInt());
     }
 
     v = options->getKeyValue("reconnect_delay_ms");
     if (!v.isNullOrNothing()) {
-        reconnect_delay_ms_ = (int)v.getAsBigInt();
+        reconnect_delay_ms_ = static_cast<int>(v.getAsBigInt());
     }
 
     // Extract SSL options
@@ -678,7 +920,7 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
     if (opts) {
         QoreValue v = opts->getKeyValue("credit");
         if (!v.isNullOrNothing()) {
-            credit = (int)v.getAsBigInt();
+            credit = static_cast<int>(v.getAsBigInt());
         }
         v = opts->getKeyValue("auto_accept");
         if (!v.isNullOrNothing()) {
@@ -686,7 +928,7 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
         }
         v = opts->getKeyValue("prefetch");
         if (!v.isNullOrNothing()) {
-            prefetch = (int)v.getAsBigInt();
+            prefetch = static_cast<int>(v.getAsBigInt());
         }
     }
 
@@ -808,11 +1050,11 @@ QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMe
     if (opts) {
         QoreValue v = opts->getKeyValue("ttl");
         if (!v.isNullOrNothing()) {
-            pmsg.ttl(proton::duration((int64_t)v.getAsBigInt()));
+            pmsg.ttl(proton::duration(static_cast<int64_t>(v.getAsBigInt())));
         }
         v = opts->getKeyValue("priority");
         if (!v.isNullOrNothing()) {
-            pmsg.priority((uint8_t)v.getAsBigInt());
+            pmsg.priority(static_cast<uint8_t>(v.getAsBigInt()));
         }
         v = opts->getKeyValue("durable");
         if (!v.isNullOrNothing()) {
@@ -824,7 +1066,7 @@ QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMe
         }
         v = opts->getKeyValue("delivery_count");
         if (!v.isNullOrNothing()) {
-            pmsg.delivery_count((uint32_t)v.getAsBigInt());
+            pmsg.delivery_count(static_cast<uint32_t>(v.getAsBigInt()));
         }
     }
 
@@ -836,14 +1078,20 @@ QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMe
     bool sent = false;
     std::string error;
 
+    // NOTE: Transacted sends (setting TransactionalState on the TRANSFER frame)
+    // require Proton C API integration that the C++ sender.send() does not support.
+    // Transaction begin/commit/rollback lifecycle is implemented; transacted message
+    // delivery is a future enhancement.
+
     if (!scheduleWork([&, this]() {
         try {
             proton::tracker t = sender.send(pmsg);
+
             // Extract the delivery tag for tracking
             proton::binary tag = t.tag();
             std::ostringstream oss;
             for (uint8_t b : tag) {
-                oss << std::hex << std::setfill('0') << std::setw(2) << (int)b;
+                oss << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(b);
             }
             tag_key = oss.str();
             // Register for tracker result
@@ -1094,9 +1342,12 @@ void QoreAmqpConnection::modify(const BinaryNode* delivery_tag, bool failed, boo
         pending_deliveries_.erase(it);
     }
 
+    // NOTE: the Qpid Proton C++ delivery.modify() API does not accept parameters
+    // for failed/undeliverable/annotations — these AMQP 1.0 MODIFIED outcome fields
+    // are not exposed. The parameters are accepted at the Qore level for forward
+    // compatibility but are currently ignored.
+    // TODO: implement via low-level proton codec when Proton adds parameter support
     scheduleWork([delivery]() mutable {
-        // proton 0.40 delivery.modify() takes no arguments;
-        // the MODIFIED state signals the broker to redeliver
         delivery.modify();
     }, xsink);
 }
@@ -1105,18 +1356,145 @@ void QoreAmqpConnection::beginTransaction(ExceptionSink* xsink) {
     if (!checkConnected(xsink)) {
         return;
     }
+    if (qore_check_cancel(xsink, "AmqpConnection::beginTransaction")) {
+        return;
+    }
 
-    std::lock_guard<std::mutex> lock(txn_mutex_);
     if (txn_active_) {
         xsink->raiseException("AMQP-TRANSACTION-ERROR", "a transaction is already active");
         return;
     }
 
-    // Note: AMQP 1.0 transactions require a coordinator link.
-    // The Qpid Proton C++ API does not directly expose transaction coordinator.
-    // Transactions are managed at the session level via declare/discharge.
-    // For now, we set the flag and handle transactions at the AmqpUtil layer
-    // using explicit coordinator messages.
+    // Reset transaction state
+    {
+        std::lock_guard<std::mutex> lock(txn_mutex_);
+        txn_coordinator_ready_ = false;
+        txn_declare_done_ = false;
+        txn_discharge_done_ = false;
+        txn_error_.clear();
+        txn_id_.clear();
+    }
+
+    // Step 1: Create coordinator sender link using C API (needed to set PN_COORDINATOR target)
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool link_done = false;
+    std::string link_error;
+
+    if (!scheduleWork([&, this]() {
+        try {
+            // Get the container's session from an existing link.
+            // We need C API to create a coordinator (PN_COORDINATOR target
+            // must be set BEFORE the link is opened / ATTACH is serialized).
+            pn_session_t* c_sess = nullptr;
+            {
+                std::lock_guard<std::mutex> lk2(links_mutex_);
+                if (!senders_.empty()) {
+                    c_sess = pn_link_session(proton_unwrap<pn_link_t>(senders_.begin()->second));
+                } else if (!receivers_.empty()) {
+                    c_sess = pn_link_session(proton_unwrap<pn_link_t>(receivers_.begin()->second));
+                }
+            }
+            if (!c_sess) {
+                // No existing links — create a temp sender to obtain the session
+                proton::sender temp = connection_.open_sender("_txn_session_probe");
+                pn_link_t* tmp = proton_unwrap<pn_link_t>(temp);
+                c_sess = pn_link_session(tmp);
+                pn_link_close(tmp);
+            }
+
+            // Create coordinator sender via C API on the container's session.
+            // Setting PN_COORDINATOR BEFORE pn_link_open() ensures the ATTACH
+            // frame carries the correct target type.
+            pn_link_t* c_link = pn_sender(c_sess, TXN_COORDINATOR_NAME);
+            pn_terminus_set_type(pn_link_target(c_link), PN_COORDINATOR);
+            pn_link_open(c_link);
+
+            txn_coordinator_link_ = c_link;
+        } catch (const std::exception& e) {
+            link_error = e.what();
+        }
+        std::lock_guard<std::mutex> lk(mtx);
+        link_done = true;
+        cv.notify_all();
+    }, xsink)) {
+        return;
+    }
+
+    // Wait for link creation
+    {
+        std::unique_lock<std::mutex> lk(mtx);
+        cv.wait(lk, [&]() { return link_done; });
+    }
+    if (!link_error.empty()) {
+        xsink->raiseException("AMQP-TRANSACTION-ERROR",
+            "failed to create transaction coordinator: %s", link_error.c_str());
+        return;
+    }
+
+    // Step 2: Wait for coordinator to get credit (on_sendable)
+    {
+        std::unique_lock<std::mutex> lock(txn_mutex_);
+        if (!waitWithCancel(lock, txn_cv_, [this]() {
+            return txn_coordinator_ready_;
+        }, 10000, "AmqpConnection::beginTransaction", xsink)) {
+            if (!*xsink) {
+                xsink->raiseException("AMQP-TRANSACTION-ERROR",
+                    "timed out waiting for transaction coordinator credit");
+            }
+            return;
+        }
+    }
+
+    // Step 3: Send Declare message on the coordinator
+    if (!scheduleWork([this]() {
+        // Build Declare message: body = described(0x31, list())
+        pn_link_t* c_link = txn_coordinator_link_;
+        static int declare_tag_counter = 0;
+        std::string tag = "txn-declare-" + std::to_string(++declare_tag_counter);
+        pn_delivery_t* d = pn_delivery(c_link, pn_dtag(tag.c_str(), tag.size()));
+
+        // Encode Declare body: described type with descriptor 0x31 and empty list
+        pn_message_t* msg = pn_message();
+        pn_data_t* body = pn_message_body(msg);
+        pn_data_put_described(body);
+        pn_data_enter(body);
+        pn_data_put_ulong(body, 0x31);  // amqp:declare:list descriptor
+        pn_data_put_list(body);          // empty list (no global-id)
+        pn_data_exit(body);
+
+        // Encode and send
+        char buf[512];
+        size_t size = sizeof(buf);
+        pn_message_encode(msg, buf, &size);
+        pn_link_send(c_link, buf, size);
+        pn_link_advance(c_link);
+        pn_message_free(msg);
+    }, xsink)) {
+        return;
+    }
+
+    // Step 4: Wait for Declared response with txn-id
+    {
+        std::unique_lock<std::mutex> lock(txn_mutex_);
+        if (!waitWithCancel(lock, txn_cv_, [this]() {
+            return txn_declare_done_;
+        }, 10000, "AmqpConnection::beginTransaction", xsink)) {
+            if (!*xsink) {
+                xsink->raiseException("AMQP-TRANSACTION-ERROR",
+                    "timed out waiting for transaction declaration");
+            }
+            return;
+        }
+
+        if (!txn_error_.empty()) {
+            std::string err = txn_error_;
+            xsink->raiseException("AMQP-TRANSACTION-ERROR",
+                "transaction declaration failed: %s", err.c_str());
+            return;
+        }
+    }
+
     txn_active_ = true;
 }
 
@@ -1125,14 +1503,12 @@ void QoreAmqpConnection::commitTransaction(ExceptionSink* xsink) {
         return;
     }
 
-    std::lock_guard<std::mutex> lock(txn_mutex_);
     if (!txn_active_) {
         xsink->raiseException("AMQP-TRANSACTION-ERROR", "no active transaction");
         return;
     }
 
-    // TODO: implement AMQP 1.0 transaction discharge with commit
-    txn_active_ = false;
+    discharge(false, xsink);
 }
 
 void QoreAmqpConnection::rollbackTransaction(ExceptionSink* xsink) {
@@ -1140,14 +1516,87 @@ void QoreAmqpConnection::rollbackTransaction(ExceptionSink* xsink) {
         return;
     }
 
-    std::lock_guard<std::mutex> lock(txn_mutex_);
     if (!txn_active_) {
         xsink->raiseException("AMQP-TRANSACTION-ERROR", "no active transaction");
         return;
     }
 
-    // TODO: implement AMQP 1.0 transaction discharge with rollback
+    discharge(true, xsink);
+}
+
+void QoreAmqpConnection::discharge(bool fail, ExceptionSink* xsink) {
+    if (qore_check_cancel(xsink, "AmqpConnection::discharge")) {
+        return;
+    }
+
+    // Reset discharge state
+    {
+        std::lock_guard<std::mutex> lock(txn_mutex_);
+        txn_discharge_done_ = false;
+        txn_error_.clear();
+    }
+
+    // Send Discharge message: described(0x32, list(txn-id, fail))
+    proton::binary saved_txn_id = txn_id_;
+    if (!scheduleWork([this, fail, saved_txn_id]() {
+        pn_link_t* c_link = txn_coordinator_link_;
+        static int discharge_tag_counter = 0;
+        std::string tag = "txn-discharge-" + std::to_string(++discharge_tag_counter);
+        pn_delivery_t* d = pn_delivery(c_link, pn_dtag(tag.c_str(), tag.size()));
+
+        pn_message_t* msg = pn_message();
+        pn_data_t* body = pn_message_body(msg);
+        pn_data_put_described(body);
+        pn_data_enter(body);
+        pn_data_put_ulong(body, 0x32);  // amqp:discharge:list descriptor
+        pn_data_put_list(body);
+        pn_data_enter(body);
+        pn_data_put_binary(body, pn_bytes(saved_txn_id.size(),
+            reinterpret_cast<const char*>(saved_txn_id.data())));
+        pn_data_put_bool(body, fail);
+        pn_data_exit(body);
+        pn_data_exit(body);
+
+        char buf[512];
+        size_t size = sizeof(buf);
+        pn_message_encode(msg, buf, &size);
+        pn_link_send(c_link, buf, size);
+        pn_link_advance(c_link);
+        pn_message_free(msg);
+    }, xsink)) {
+        return;
+    }
+
+    // Wait for discharge confirmation
+    {
+        std::unique_lock<std::mutex> lock(txn_mutex_);
+        if (!waitWithCancel(lock, txn_cv_, [this]() {
+            return txn_discharge_done_;
+        }, 10000, "AmqpConnection::discharge", xsink)) {
+            if (!*xsink) {
+                xsink->raiseException("AMQP-TRANSACTION-ERROR",
+                    "timed out waiting for transaction %s",
+                    fail ? "rollback" : "commit");
+            }
+            // Transaction state is indeterminate — mark as inactive
+            txn_active_ = false;
+            txn_id_.clear();
+            return;
+        }
+
+        if (!txn_error_.empty()) {
+            std::string err = txn_error_;
+            txn_active_ = false;
+            txn_id_.clear();
+            xsink->raiseException("AMQP-TRANSACTION-ERROR",
+                "transaction %s failed: %s", fail ? "rollback" : "commit",
+                err.c_str());
+            return;
+        }
+    }
+
     txn_active_ = false;
+    txn_id_.clear();
 }
 
 bool QoreAmqpConnection::inTransaction() const {
@@ -1366,11 +1815,7 @@ QoreListNode* QoreAmqpConnection::queryAddresses(ExceptionSink* xsink) {
         return new QoreListNode(hashdeclAmqpAddressInfo->getTypeInfo());
     }
 
-    // Parse the result into AmqpAddressInfo hashdecls
-    ReferenceHolder<QoreListNode> list(
-        new QoreListNode(hashdeclAmqpAddressInfo->getTypeInfo()), xsink);
-    // TODO: parse management response into address info
-    return list.release();
+    return parseQueryResponse(*result, hashdeclAmqpAddressInfo, buildAddressInfo, xsink);
 }
 
 QoreListNode* QoreAmqpConnection::queryQueues(const char* address, ExceptionSink* xsink) {
@@ -1389,10 +1834,30 @@ QoreListNode* QoreAmqpConnection::queryQueues(const char* address, ExceptionSink
         return new QoreListNode(hashdeclAmqpQueueInfo->getTypeInfo());
     }
 
-    ReferenceHolder<QoreListNode> list(
-        new QoreListNode(hashdeclAmqpQueueInfo->getTypeInfo()), xsink);
-    // TODO: parse management response into queue info
-    return list.release();
+    ReferenceHolder<QoreListNode> all(
+        parseQueryResponse(*result, hashdeclAmqpQueueInfo, buildQueueInfo, xsink), xsink);
+    if (*xsink || !all) {
+        return new QoreListNode(hashdeclAmqpQueueInfo->getTypeInfo());
+    }
+
+    // Client-side filter by address if requested
+    if (address && *address) {
+        ReferenceHolder<QoreListNode> filtered(
+            new QoreListNode(hashdeclAmqpQueueInfo->getTypeInfo()), xsink);
+        std::string filter_addr(address);
+        for (size_t i = 0; i < all->size(); ++i) {
+            QoreValue elem = all->retrieveEntry(i);
+            if (elem.getType() == NT_HASH) {
+                std::string addr = getStringVal(elem.get<const QoreHashNode>(), "address");
+                if (addr == filter_addr) {
+                    elem.refSelf();
+                    filtered->push(elem, xsink);
+                }
+            }
+        }
+        return filtered.release();
+    }
+    return all.release();
 }
 
 QoreHashNode* QoreAmqpConnection::getAddressInfo(const char* address, ExceptionSink* xsink) {
@@ -1410,8 +1875,7 @@ QoreHashNode* QoreAmqpConnection::getAddressInfo(const char* address, ExceptionS
         return nullptr;
     }
 
-    // TODO: parse management response into address details
-    return result.release();
+    return buildAddressInfo(*result, xsink);
 }
 
 QoreHashNode* QoreAmqpConnection::getQueueInfo(const char* queue, ExceptionSink* xsink) {
@@ -1429,8 +1893,7 @@ QoreHashNode* QoreAmqpConnection::getQueueInfo(const char* queue, ExceptionSink*
         return nullptr;
     }
 
-    // TODO: parse management response into queue details
-    return result.release();
+    return buildQueueInfo(*result, xsink);
 }
 
 QoreHashNode* QoreAmqpConnection::managementRequest(const std::string& operation,
@@ -1584,7 +2047,7 @@ std::string QoreAmqpConnection::deliveryTagKey(const proton::delivery& d) {
     proton::binary tag = d.tag();
     std::ostringstream oss;
     for (uint8_t b : tag) {
-        oss << std::hex << std::setfill('0') << std::setw(2) << (int)b;
+        oss << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(b);
     }
     return oss.str();
 }
@@ -1596,7 +2059,7 @@ std::string QoreAmqpConnection::deliveryTagKey(const BinaryNode* tag) {
     const uint8_t* data = reinterpret_cast<const uint8_t*>(tag->getPtr());
     std::ostringstream oss;
     for (size_t i = 0; i < tag->size(); ++i) {
-        oss << std::hex << std::setfill('0') << std::setw(2) << (int)data[i];
+        oss << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(data[i]);
     }
     return oss.str();
 }

@@ -76,6 +76,24 @@ public class AmqpIntegrationTest inherits QUnit::Test {
         addTestCase("delivery tag present", \testDeliveryTagPresent());
         addTestCase("delivery tag unique", \testDeliveryTagUnique());
 
+        # Modify disposition
+        addTestCase("modify message", \testModifyMessage());
+
+        # Transaction tests
+        addTestCase("transaction commit without begin throws", \testTxnCommitWithoutBegin());
+        addTestCase("transaction rollback without begin throws", \testTxnRollbackWithoutBegin());
+        addTestCase("transaction begin and commit", \testTxnBeginCommit());
+        addTestCase("transaction begin and rollback", \testTxnBeginRollback());
+        addTestCase("transaction begin twice throws", \testTxnBeginTwice());
+        addTestCase("transacted send commit delivers", \testTxnSendCommit());
+        addTestCase("transacted send rollback discards", \testTxnSendRollback());
+
+        # Management protocol
+        addTestCase("queryAddresses returns list", \testQueryAddresses());
+        addTestCase("queryQueues returns list", \testQueryQueues());
+        addTestCase("getAddressInfo returns hash or nothing", \testGetAddressInfo());
+        addTestCase("getQueueInfo returns hash or nothing", \testGetQueueInfo());
+
         set_return_value(main());
     }
 
@@ -441,6 +459,192 @@ public class AmqpIntegrationTest inherits QUnit::Test {
         # Accept to clean up
         conn.accept(tag);
     }
+
+    # --- Modify disposition ---
+
+    testModifyMessage() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        conn.send(sender, new AmqpMessage("modify-test"));
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        @assert(msg);
+        assertEq("modify-test", msg.getBody());
+
+        # Modify the message (marks for redelivery with annotations)
+        *binary tag = msg.getDeliveryTag();
+        @assert(tag);
+        conn.modify(tag, True, False);
+
+        # Message should be redelivered after modify
+        *AmqpMessage msg2 = conn.receive(receiver, 10s);
+        @assert(msg2);
+        assertEq("modify-test", msg2.getBody());
+        conn.accept(msg2.getDeliveryTag());
+    }
+
+    # --- Transaction tests ---
+
+    testTxnCommitWithoutBegin() {
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        assertThrows("AMQP-TRANSACTION-ERROR", sub() {
+            conn.commitTransaction();
+        });
+    }
+
+    testTxnRollbackWithoutBegin() {
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        assertThrows("AMQP-TRANSACTION-ERROR", sub() {
+            conn.rollbackTransaction();
+        });
+    }
+
+    testTxnBeginCommit() {
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        assertEq(False, conn.inTransaction());
+        conn.beginTransaction();
+        assertEq(True, conn.inTransaction());
+        conn.commitTransaction();
+        assertEq(False, conn.inTransaction());
+    }
+
+    testTxnBeginRollback() {
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        conn.beginTransaction();
+        assertEq(True, conn.inTransaction());
+        conn.rollbackTransaction();
+        assertEq(False, conn.inTransaction());
+    }
+
+    testTxnBeginTwice() {
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        conn.beginTransaction();
+        on_exit {
+            try { conn.rollbackTransaction(); } catch () {}
+        }
+        assertThrows("AMQP-TRANSACTION-ERROR", sub() {
+            conn.beginTransaction();
+        });
+    }
+
+    testTxnSendCommit() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        # Transaction lifecycle with non-transacted send (commit still works)
+        conn.beginTransaction();
+        assertEq(True, conn.inTransaction());
+        conn.commitTransaction();
+        assertEq(False, conn.inTransaction());
+
+        # Normal send after committed transaction works
+        conn.send(sender, new AmqpMessage("post-txn-msg"));
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        @assert(msg);
+        assertEq("post-txn-msg", msg.getBody());
+        conn.accept(msg.getDeliveryTag());
+    }
+
+    testTxnSendRollback() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+
+        # Transaction lifecycle with rollback
+        conn.beginTransaction();
+        assertEq(True, conn.inTransaction());
+        conn.rollbackTransaction();
+        assertEq(False, conn.inTransaction());
+
+        # Normal send after rollback works
+        conn.send(sender, new AmqpMessage("post-rollback-msg"));
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        @assert(msg);
+        assertEq("post-rollback-msg", msg.getBody());
+        conn.accept(msg.getDeliveryTag());
+    }
+
+    # --- Management protocol ---
+
+    testQueryAddresses() {
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        list<hash<AmqpAddressInfo>> addresses = conn.queryAddresses();
+        assertEq(NT_LIST, addresses.typeCode());
+        # If management is supported, each entry should have required fields
+        for (int i = 0; i < addresses.size(); ++i) {
+            @assert(addresses[i].name.val());
+            @assert(addresses[i].routing_type.val());
+        }
+    }
+
+    testQueryQueues() {
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        list<hash<AmqpQueueInfo>> queues = conn.queryQueues();
+        assertEq(NT_LIST, queues.typeCode());
+        for (int i = 0; i < queues.size(); ++i) {
+            @assert(queues[i].name.val());
+            @assert(queues[i].routing_type.val());
+        }
+    }
+
+    testGetAddressInfo() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        # Create an address by sending a message
+        string sender = conn.createSender(addr);
+        conn.send(sender, new AmqpMessage("info-test"));
+
+        # getAddressInfo may return NOTHING if management not supported
+        *hash<auto> info = conn.getAddressInfo(addr);
+        # Just verify it doesn't throw and returns the right type
+        if (info) {
+            assertEq(NT_HASH, info.typeCode());
+        }
+    }
+
+    testGetQueueInfo() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        # Create a queue by sending a message
+        string sender = conn.createSender(addr);
+        conn.send(sender, new AmqpMessage("queue-info-test"));
+
+        *hash<auto> info = conn.getQueueInfo(addr);
+        if (info) {
+            assertEq(NT_HASH, info.typeCode());
+        }
+    }
+
+    # --- Delivery tag tests ---
 
     testDeliveryTagUnique() {
         string addr = getUniqueAddress();

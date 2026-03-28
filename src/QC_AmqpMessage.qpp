@@ -132,7 +132,7 @@ auto body = msg.getBody();
 
     @since %amqp 1.0
 */
-auto AmqpMessage::getBody() {
+auto AmqpMessage::getBody() [flags=RET_VALUE_ONLY] {
     return msg->getBody(xsink);
 }
 
@@ -146,7 +146,7 @@ hash<AmqpMessageProperties> props = msg.getProperties();
 
     @since %amqp 1.0
 */
-hash<AmqpMessageProperties> AmqpMessage::getProperties() {
+hash<AmqpMessageProperties> AmqpMessage::getProperties() [flags=RET_VALUE_ONLY] {
     return msg->getProperties(xsink);
 }
 
@@ -160,7 +160,7 @@ hash<AmqpMessageProperties> AmqpMessage::getProperties() {
 
     @since %amqp 1.0
 */
-*hash<auto> AmqpMessage::getApplicationProperties() {
+*hash<auto> AmqpMessage::getApplicationProperties() [flags=RET_VALUE_ONLY] {
     return msg->getApplicationProperties(xsink);
 }
 
@@ -174,7 +174,7 @@ hash<AmqpMessageProperties> AmqpMessage::getProperties() {
 
     @since %amqp 1.0
 */
-*string AmqpMessage::getContentType() {
+*string AmqpMessage::getContentType() [flags=RET_VALUE_ONLY] {
     return msg->getContentType(xsink);
 }
 
@@ -188,7 +188,7 @@ auto id = msg.getMessageId();
 
     @since %amqp 1.0
 */
-auto AmqpMessage::getMessageId() {
+auto AmqpMessage::getMessageId() [flags=RET_VALUE_ONLY] {
     return msg->getMessageId(xsink);
 }
 
@@ -202,7 +202,7 @@ auto cid = msg.getCorrelationId();
 
     @since %amqp 1.0
 */
-auto AmqpMessage::getCorrelationId() {
+auto AmqpMessage::getCorrelationId() [flags=RET_VALUE_ONLY] {
     return msg->getCorrelationId(xsink);
 }
 
@@ -216,7 +216,7 @@ auto AmqpMessage::getCorrelationId() {
 
     @since %amqp 1.0
 */
-*string AmqpMessage::getReplyTo() {
+*string AmqpMessage::getReplyTo() [flags=RET_VALUE_ONLY] {
     return msg->getReplyTo(xsink);
 }
 
@@ -230,7 +230,7 @@ auto AmqpMessage::getCorrelationId() {
 
     @since %amqp 1.0
 */
-*string AmqpMessage::getSubject() {
+*string AmqpMessage::getSubject() [flags=RET_VALUE_ONLY] {
     return msg->getSubject(xsink);
 }
 
@@ -257,6 +257,6 @@ if (msg) {
 
     @since %amqp 1.0
 */
-*binary AmqpMessage::getDeliveryTag() {
+*binary AmqpMessage::getDeliveryTag() [flags=CONSTANT] {
     return msg->getDeliveryTag();
 }

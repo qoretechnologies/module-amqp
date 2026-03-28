@@ -85,6 +85,12 @@ public class AmqpTest inherits QUnit::Test {
         # Delivery tag tests
         addTestCase("getDeliveryTag on created message", \testDeliveryTagCreatedMessage());
 
+        # Transaction state tests (no broker needed)
+        addTestCase("inTransaction initial state", \testInTransactionInitial());
+        addTestCase("commit without connection throws", \testCommitWithoutConnection());
+        addTestCase("rollback without connection throws", \testRollbackWithoutConnection());
+        addTestCase("beginTransaction without connection throws", \testBeginWithoutConnection());
+
         # Negative tests
         addTestCase("AmqpConnection missing url", \testConnectionMissingUrl());
         addTestCase("AmqpConnection invalid url", \testConnectionInvalidUrl());
@@ -516,6 +522,42 @@ public class AmqpTest inherits QUnit::Test {
 
         AmqpMessage msg2(42, <AmqpMessageProperties>{"message_id": "test-id"});
         assertNothing(msg2.getDeliveryTag());
+    }
+
+    # --- Transaction state tests ---
+
+    testInTransactionInitial() {
+        AmqpConnection conn(<AmqpConnectionOptions>{
+            "url": "amqp://localhost:5672",
+        });
+        assertEq(False, conn.inTransaction());
+    }
+
+    testCommitWithoutConnection() {
+        AmqpConnection conn(<AmqpConnectionOptions>{
+            "url": "amqp://localhost:5672",
+        });
+        assertThrows("AMQP-CONNECTION-ERROR", sub() {
+            conn.commitTransaction();
+        });
+    }
+
+    testRollbackWithoutConnection() {
+        AmqpConnection conn(<AmqpConnectionOptions>{
+            "url": "amqp://localhost:5672",
+        });
+        assertThrows("AMQP-CONNECTION-ERROR", sub() {
+            conn.rollbackTransaction();
+        });
+    }
+
+    testBeginWithoutConnection() {
+        AmqpConnection conn(<AmqpConnectionOptions>{
+            "url": "amqp://localhost:5672",
+        });
+        assertThrows("AMQP-CONNECTION-ERROR", sub() {
+            conn.beginTransaction();
+        });
     }
 
     # --- Negative tests ---

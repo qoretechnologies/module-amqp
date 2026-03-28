@@ -313,7 +313,7 @@ if (conn.isConnected()) {
 
     @since %amqp 1.0
 */
-bool AmqpConnection::isConnected() {
+bool AmqpConnection::isConnected() [flags=CONSTANT] {
     return conn->isConnected();
 }
 
@@ -535,7 +535,7 @@ if (conn.inTransaction()) {
 
     @since %amqp 1.0
 */
-bool AmqpConnection::inTransaction() {
+bool AmqpConnection::inTransaction() [flags=CONSTANT] {
     return conn->inTransaction();
 }
 

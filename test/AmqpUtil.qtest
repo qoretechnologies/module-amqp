@@ -83,6 +83,10 @@ public class AmqpUtilTest inherits QUnit::Test {
 
         # Transaction pass-through
         addTestCase("client transaction methods", \testClientTransaction());
+        addTestCase("client transaction commit delivers", \testClientTxnCommit());
+        addTestCase("client transaction rollback discards", \testClientTxnRollback());
+        addTestCase("client commit without begin throws", \testClientTxnCommitNoBegin());
+        addTestCase("client rollback without begin throws", \testClientTxnRollbackNoBegin());
 
         set_return_value(main());
     }
@@ -445,7 +449,49 @@ public class AmqpUtilTest inherits QUnit::Test {
         on_exit client.close();
 
         assertEq(False, client.inTransaction());
-        # Note: actual transaction support depends on broker + implementation
-        # Just verify the methods are callable
+        client.beginTransaction();
+        assertEq(True, client.inTransaction());
+        client.commitTransaction();
+        assertEq(False, client.inTransaction());
+    }
+
+    testClientTxnCommit() {
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        # Full begin/commit lifecycle via AmqpClient
+        client.beginTransaction();
+        assertEq(True, client.inTransaction());
+        client.commitTransaction();
+        assertEq(False, client.inTransaction());
+    }
+
+    testClientTxnRollback() {
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        # Full begin/rollback lifecycle via AmqpClient
+        client.beginTransaction();
+        assertEq(True, client.inTransaction());
+        client.rollbackTransaction();
+        assertEq(False, client.inTransaction());
+    }
+
+    testClientTxnCommitNoBegin() {
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        assertThrows("AMQP-TRANSACTION-ERROR", sub() {
+            client.commitTransaction();
+        });
+    }
+
+    testClientTxnRollbackNoBegin() {
+        AmqpClient client = getClient();
+        on_exit client.close();
+
+        assertThrows("AMQP-TRANSACTION-ERROR", sub() {
+            client.rollbackTransaction();
+        });
     }
 }

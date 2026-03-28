@@ -107,7 +107,7 @@ QoreHashNode* QoreAmqpMessage::getProperties(ExceptionSink* xsink) const {
 
     // group_sequence
     if (msg.group_sequence() != 0) {
-        props->setKeyValue("group_sequence", (int64)msg.group_sequence(), xsink);
+        props->setKeyValue("group_sequence", static_cast<int64>(msg.group_sequence()), xsink);
     }
 
     // reply_to_group_id

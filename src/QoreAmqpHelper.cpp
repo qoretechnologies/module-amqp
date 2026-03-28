@@ -473,7 +473,7 @@ proton::value QoreAmqpHelper::listToProton(const QoreListNode* list, ExceptionSi
 DateTimeNode* QoreAmqpHelper::timestampToDate(proton::timestamp ts) {
     int64 ms = ts.milliseconds();
     int64 secs = ms / 1000;
-    int us = (int)((ms % 1000) * 1000);
+    int us = static_cast<int>((ms % 1000) * 1000);
     return DateTimeNode::makeAbsolute(0, secs, us);
 }
 
