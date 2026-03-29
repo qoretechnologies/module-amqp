@@ -203,7 +203,8 @@ public class AmqpDataProviderTest inherits QUnit::Test {
         # Send a message via doRequest
         auto result = address_dp.doRequest({"body": "Hello from DataProvider!"});
         @assert(result);
-        assertEq("string", result.state.type());
+        assertEq(True, result.settled);
+        assertEq("accepted", result.state);
     }
 
     testAddressChildren() {

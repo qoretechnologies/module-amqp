@@ -465,11 +465,16 @@ public class AmqpUtilTest inherits QUnit::Test {
         AmqpClient client = getClient();
         on_exit client.close();
 
+        # Create receiver first so the queue exists
+        AmqpConsumer consumer = client.createConsumer(addr);
         AmqpProducer producer = client.createProducer(addr);
         producer.send("before close");
         producer.close();
-        # After close, the underlying sender link is removed
-        assertTrue(True);
+
+        # Verify the message sent before close is still deliverable
+        *AmqpMessage msg = consumer.receive(10s);
+        @assert(msg);
+        assertEq("before close", msg.getBody());
     }
 
     # --- AmqpConsumer extended ---
@@ -479,10 +484,17 @@ public class AmqpUtilTest inherits QUnit::Test {
         AmqpClient client = getClient();
         on_exit client.close();
 
+        # Send a message, consume it, then close the consumer
         AmqpConsumer consumer = client.createConsumer(addr);
+        client.send(addr, "close-test");
+        *AmqpMessage msg = consumer.receive(10s);
+        @assert(msg);
+        assertEq("close-test", msg.getBody());
         consumer.close();
-        # After close, the receiver link is removed
-        assertTrue(True);
+
+        # After close, creating a new consumer on the same address works
+        AmqpConsumer consumer2 = client.createConsumer(addr);
+        @assert(consumer2.getReceiverName());
     }
 
     testConsumerReject() {
@@ -540,8 +552,15 @@ public class AmqpUtilTest inherits QUnit::Test {
 
         client.send(addr, "test");
         *AmqpMessage msg = client.receive(addr, 5s);
+        @assert(msg);
+        assertEq("test", msg.getBody());
         client.closeReceiver(addr);
-        assertTrue(True);
+
+        # After close, receiving again creates a new receiver (lazy recreation)
+        client.send(addr, "after close");
+        *AmqpMessage msg2 = client.receive(addr, 10s);
+        @assert(msg2);
+        assertEq("after close", msg2.getBody());
     }
 
     # --- AmqpClient batch and shared ---
