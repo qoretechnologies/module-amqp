@@ -605,7 +605,7 @@ public class AmqpUtilTest inherits QUnit::Test {
         client.setAutoConvert(True);
 
         # Create receiver first
-        *hash<auto> warmup = client.receiveAndDecode(addr, 1s);
+        client.receiveAndDecode(addr, 1s);
 
         # Send JSON-encoded message via auto-convert
         hash<auto> data = {"order_id": 42, "item": "widget"};
