@@ -81,10 +81,11 @@ std::string getStringVal(const QoreHashNode* h, const char* key) {
         return {};
     }
     if (v.getType() == NT_STRING) {
-        return v.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper str(v);
+        return std::string(str->c_str(), str->size());
     }
     QoreStringValueHelper str(v);
-    return str->c_str();
+    return std::string(str->c_str(), str->size());
 }
 
 // Safely get an int from a Qore hash, default if missing
@@ -126,7 +127,8 @@ std::string getRoutingType(const QoreHashNode* h) {
             if (rt_list->size() > 0) {
                 QoreValue first = rt_list->retrieveEntry(0);
                 if (first.getType() == NT_STRING) {
-                    rt = first.get<const QoreStringNode>()->c_str();
+                    QoreStringValueHelper str(first);
+                    rt.assign(str->c_str(), str->size());
                 }
             }
         }
@@ -610,12 +612,16 @@ QoreAmqpConnection::QoreAmqpConnection(const QoreHashNode* options, ExceptionSin
         xsink->raiseException("AMQP-CONNECTION-ERROR", "missing required 'url' option");
         return;
     }
-    const QoreStringNode* url_str = v.get<const QoreStringNode>();
-    if (!url_str || url_str->empty()) {
+    if (v.getType() != NT_STRING) {
+        xsink->raiseException("AMQP-CONNECTION-ERROR", "'url' option must be a string");
+        return;
+    }
+    QoreStringValueHelper url_str(v);
+    if (url_str->empty()) {
         xsink->raiseException("AMQP-CONNECTION-ERROR", "empty 'url' option");
         return;
     }
-    url_ = url_str->c_str();
+    url_.assign(url_str->c_str(), url_str->size());
 
     // Validate URL scheme
     if (url_.substr(0, 4) != "amqp") {
@@ -642,17 +648,17 @@ QoreAmqpConnection::QoreAmqpConnection(const QoreHashNode* options, ExceptionSin
 
     v = options->getKeyValue("container_id");
     if (!v.isNullOrNothing()) {
-        const QoreStringNode* s = v.get<const QoreStringNode>();
-        if (s) {
-            container_id_ = s->c_str();
+        if (v.getType() == NT_STRING) {
+            QoreStringValueHelper s(v);
+            container_id_.assign(s->c_str(), s->size());
         }
     }
 
     v = options->getKeyValue("virtual_host");
     if (!v.isNullOrNothing()) {
-        const QoreStringNode* s = v.get<const QoreStringNode>();
-        if (s) {
-            virtual_host_ = s->c_str();
+        if (v.getType() == NT_STRING) {
+            QoreStringValueHelper s(v);
+            virtual_host_.assign(s->c_str(), s->size());
         }
     }
 
@@ -678,23 +684,23 @@ QoreAmqpConnection::QoreAmqpConnection(const QoreHashNode* options, ExceptionSin
         if (ssl) {
             QoreValue sv = ssl->getKeyValue("ca_cert");
             if (!sv.isNullOrNothing()) {
-                const QoreStringNode* s = sv.get<const QoreStringNode>();
-                if (s) {
-                    ssl_ca_cert_ = s->c_str();
+                if (sv.getType() == NT_STRING) {
+                    QoreStringValueHelper s(sv);
+                    ssl_ca_cert_.assign(s->c_str(), s->size());
                 }
             }
             sv = ssl->getKeyValue("client_cert");
             if (!sv.isNullOrNothing()) {
-                const QoreStringNode* s = sv.get<const QoreStringNode>();
-                if (s) {
-                    ssl_client_cert_ = s->c_str();
+                if (sv.getType() == NT_STRING) {
+                    QoreStringValueHelper s(sv);
+                    ssl_client_cert_.assign(s->c_str(), s->size());
                 }
             }
             sv = ssl->getKeyValue("client_key");
             if (!sv.isNullOrNothing()) {
-                const QoreStringNode* s = sv.get<const QoreStringNode>();
-                if (s) {
-                    ssl_client_key_ = s->c_str();
+                if (sv.getType() == NT_STRING) {
+                    QoreStringValueHelper s(sv);
+                    ssl_client_key_.assign(s->c_str(), s->size());
                 }
             }
             sv = ssl->getKeyValue("verify");
@@ -711,23 +717,23 @@ QoreAmqpConnection::QoreAmqpConnection(const QoreHashNode* options, ExceptionSin
         if (sasl) {
             QoreValue sv = sasl->getKeyValue("mechanism");
             if (!sv.isNullOrNothing()) {
-                const QoreStringNode* s = sv.get<const QoreStringNode>();
-                if (s) {
-                    sasl_mechanism_ = s->c_str();
+                if (sv.getType() == NT_STRING) {
+                    QoreStringValueHelper s(sv);
+                    sasl_mechanism_.assign(s->c_str(), s->size());
                 }
             }
             sv = sasl->getKeyValue("username");
             if (!sv.isNullOrNothing()) {
-                const QoreStringNode* s = sv.get<const QoreStringNode>();
-                if (s) {
-                    sasl_username_ = s->c_str();
+                if (sv.getType() == NT_STRING) {
+                    QoreStringValueHelper s(sv);
+                    sasl_username_.assign(s->c_str(), s->size());
                 }
             }
             sv = sasl->getKeyValue("password");
             if (!sv.isNullOrNothing()) {
-                const QoreStringNode* s = sv.get<const QoreStringNode>();
-                if (s) {
-                    sasl_password_ = s->c_str();
+                if (sv.getType() == NT_STRING) {
+                    QoreStringValueHelper s(sv);
+                    sasl_password_.assign(s->c_str(), s->size());
                 }
             }
         }
@@ -1046,11 +1052,9 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
 
     if (filter) {
         QoreValue v = filter->getKeyValue("selector");
-        if (!v.isNullOrNothing()) {
-            const QoreStringNode* s = v.get<const QoreStringNode>();
-            if (s) {
-                selector = s->c_str();
-            }
+        if (v.getType() == NT_STRING) {
+            QoreStringValueHelper s(v);
+            selector.assign(s->c_str(), s->size());
         }
     }
 
@@ -2173,11 +2177,9 @@ QoreStringNode* QoreAmqpConnection::createDurableReceiver(const char* address,
     std::string selector;
     if (filter) {
         QoreValue v = filter->getKeyValue("selector");
-        if (!v.isNullOrNothing()) {
-            const QoreStringNode* s = v.get<const QoreStringNode>();
-            if (s) {
-                selector = s->c_str();
-            }
+        if (v.getType() == NT_STRING) {
+            QoreStringValueHelper s(v);
+            selector.assign(s->c_str(), s->size());
         }
     }
 

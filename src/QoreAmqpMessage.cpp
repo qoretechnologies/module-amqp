@@ -239,56 +239,44 @@ void QoreAmqpMessage::applyProperties(const QoreHashNode* properties, ExceptionS
 
     // reply_to
     v = properties->getKeyValue("reply_to");
-    if (!v.isNullOrNothing()) {
-        const QoreStringNode* str = v.get<const QoreStringNode>();
-        if (str) {
-            msg.reply_to(std::string(str->c_str()));
-        }
+    if (v.getType() == NT_STRING) {
+        QoreStringValueHelper str(v);
+        msg.reply_to(std::string(str->c_str(), str->size()));
     }
 
     // content_type
     v = properties->getKeyValue("content_type");
-    if (!v.isNullOrNothing()) {
-        const QoreStringNode* str = v.get<const QoreStringNode>();
-        if (str) {
-            msg.content_type(std::string(str->c_str()));
-        }
+    if (v.getType() == NT_STRING) {
+        QoreStringValueHelper str(v);
+        msg.content_type(std::string(str->c_str(), str->size()));
     }
 
     // content_encoding
     v = properties->getKeyValue("content_encoding");
-    if (!v.isNullOrNothing()) {
-        const QoreStringNode* str = v.get<const QoreStringNode>();
-        if (str) {
-            msg.content_encoding(std::string(str->c_str()));
-        }
+    if (v.getType() == NT_STRING) {
+        QoreStringValueHelper str(v);
+        msg.content_encoding(std::string(str->c_str(), str->size()));
     }
 
     // subject
     v = properties->getKeyValue("subject");
-    if (!v.isNullOrNothing()) {
-        const QoreStringNode* str = v.get<const QoreStringNode>();
-        if (str) {
-            msg.subject(std::string(str->c_str()));
-        }
+    if (v.getType() == NT_STRING) {
+        QoreStringValueHelper str(v);
+        msg.subject(std::string(str->c_str(), str->size()));
     }
 
     // to
     v = properties->getKeyValue("to");
-    if (!v.isNullOrNothing()) {
-        const QoreStringNode* str = v.get<const QoreStringNode>();
-        if (str) {
-            msg.to(std::string(str->c_str()));
-        }
+    if (v.getType() == NT_STRING) {
+        QoreStringValueHelper str(v);
+        msg.to(std::string(str->c_str(), str->size()));
     }
 
     // group_id
     v = properties->getKeyValue("group_id");
-    if (!v.isNullOrNothing()) {
-        const QoreStringNode* str = v.get<const QoreStringNode>();
-        if (str) {
-            msg.group_id(std::string(str->c_str()));
-        }
+    if (v.getType() == NT_STRING) {
+        QoreStringValueHelper str(v);
+        msg.group_id(std::string(str->c_str(), str->size()));
     }
 
     // group_sequence
@@ -299,11 +287,9 @@ void QoreAmqpMessage::applyProperties(const QoreHashNode* properties, ExceptionS
 
     // reply_to_group_id
     v = properties->getKeyValue("reply_to_group_id");
-    if (!v.isNullOrNothing()) {
-        const QoreStringNode* str = v.get<const QoreStringNode>();
-        if (str) {
-            msg.reply_to_group_id(std::string(str->c_str()));
-        }
+    if (v.getType() == NT_STRING) {
+        QoreStringValueHelper str(v);
+        msg.reply_to_group_id(std::string(str->c_str(), str->size()));
     }
 
     // expiry_time

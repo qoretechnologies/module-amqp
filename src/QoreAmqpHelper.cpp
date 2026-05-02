@@ -123,7 +123,7 @@ proton::value QoreAmqpHelper::qoreToProton(const QoreValue& val, ExceptionSink* 
             return proton::value(val.getAsFloat());
 
         case NT_STRING: {
-            const QoreStringNode* str = val.get<const QoreStringNode>();
+            QoreStringValueHelper str(val);
             return proton::value(std::string(str->c_str(), str->size()));
         }
 
@@ -306,7 +306,7 @@ proton::scalar QoreAmqpHelper::qoreToScalar(const QoreValue& val, ExceptionSink*
             return proton::scalar(val.getAsFloat());
 
         case NT_STRING: {
-            const QoreStringNode* str = val.get<const QoreStringNode>();
+            QoreStringValueHelper str(val);
             return proton::scalar(std::string(str->c_str(), str->size()));
         }
 
@@ -339,7 +339,7 @@ proton::message_id QoreAmqpHelper::qoreToMessageId(const QoreValue& val, Excepti
         }
 
         case NT_STRING: {
-            const QoreStringNode* str = val.get<const QoreStringNode>();
+            QoreStringValueHelper str(val);
             return proton::message_id(std::string(str->c_str(), str->size()));
         }
 
