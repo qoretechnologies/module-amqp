@@ -30,6 +30,7 @@
 %requires QUnit
 %requires amqp
 %requires AmqpUtil
+%requires ConnectionProvider
 %requires AmqpDataProvider
 
 %exec-class AmqpDataProviderTest
