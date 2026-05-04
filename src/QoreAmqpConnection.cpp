@@ -399,6 +399,11 @@ void QoreAmqpConnection::Handler::on_receiver_open(proton::receiver& r) {
             conn_.cached_session_ = pn_link_session(link);
         }
     }
+    {
+        std::lock_guard<std::mutex> lock(conn_.attach_mutex_);
+        conn_.attached_receivers_.insert(r.name());
+    }
+    conn_.attach_cv_.notify_all();
 }
 
 void QoreAmqpConnection::Handler::on_sender_close(proton::sender& s) {
@@ -1145,6 +1150,25 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
         return nullptr;
     }
 
+    // Wait for the broker to confirm the link attach.  open_receiver() above
+    // only schedules the ATTACH frame; with MULTICAST routing (Artemis
+    // default) the broker creates the subscription queue on attach, so a
+    // sender on another connection that publishes before this point will
+    // have its message dropped.
+    {
+        std::unique_lock<std::mutex> lock(attach_mutex_);
+        if (!waitWithCancel(lock, attach_cv_,
+                [&]() { return attached_receivers_.count(name) > 0; },
+                30000, "AmqpConnection::createReceiver", xsink)) {
+            if (!*xsink) {
+                xsink->raiseException("AMQP-RECEIVER-ERROR",
+                    "timed out waiting for broker to attach receiver for '%s'",
+                    address);
+            }
+            return nullptr;
+        }
+    }
+
     return new QoreStringNode(name);
 }
 
@@ -1206,6 +1230,10 @@ void QoreAmqpConnection::closeReceiver(const char* receiver_name, ExceptionSink*
     {
         std::lock_guard<std::mutex> lock(recv_mutex_);
         received_messages_.erase(name);
+    }
+    {
+        std::lock_guard<std::mutex> lock(attach_mutex_);
+        attached_receivers_.erase(name);
     }
 
     scheduleWork([receiver]() mutable {
@@ -2256,6 +2284,23 @@ QoreStringNode* QoreAmqpConnection::createDurableReceiver(const char* address,
         return nullptr;
     }
 
+    // Wait for the broker to confirm the link attach (see createReceiver()
+    // for the rationale).
+    {
+        std::unique_lock<std::mutex> lock(attach_mutex_);
+        if (!waitWithCancel(lock, attach_cv_,
+                [&]() { return attached_receivers_.count(name) > 0; },
+                30000, "AmqpConnection::createDurableReceiver", xsink)) {
+            if (!*xsink) {
+                xsink->raiseException("AMQP-RECEIVER-ERROR",
+                    "timed out waiting for broker to attach durable receiver "
+                    "for '%s' with subscription '%s'",
+                    address, subscription_name);
+            }
+            return nullptr;
+        }
+    }
+
     return new QoreStringNode(name);
 }
 
@@ -2276,6 +2321,10 @@ void QoreAmqpConnection::closeDurableReceiver(const char* receiver_name, Excepti
         }
         receiver = it->second;
         receivers_.erase(it);
+    }
+    {
+        std::lock_guard<std::mutex> lock(attach_mutex_);
+        attached_receivers_.erase(name);
     }
 
     // Close the receiver without detaching (keeps the subscription)
@@ -2310,6 +2359,10 @@ void QoreAmqpConnection::unsubscribeDurable(const char* subscription_name, Excep
                 }
             }
         }
+    }
+    {
+        std::lock_guard<std::mutex> lock(attach_mutex_);
+        attached_receivers_.erase(name);
     }
 
     // To unsubscribe a durable, we open a receiver with the subscription name

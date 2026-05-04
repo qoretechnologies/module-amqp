@@ -62,6 +62,7 @@
 #include <condition_variable>
 #include <map>
 #include <queue>
+#include <set>
 #include <string>
 #include <memory>
 #include <atomic>
@@ -320,6 +321,17 @@ private:
     std::map<std::string, proton::sender> senders_;
     std::map<std::string, proton::receiver> receivers_;
     int link_counter_ = 0;
+
+    // Tracks receivers that have been attached at the broker (on_receiver_open
+    // has fired).  createReceiver() must wait for this signal before returning,
+    // otherwise messages sent by another connection between the local attach
+    // and the broker's confirmation can be dropped — with MULTICAST routing
+    // (Artemis default) the subscription queue is only created when the link
+    // is attached at the broker, so any message that arrives before then has
+    // no queue to route to.
+    std::mutex attach_mutex_;
+    std::condition_variable attach_cv_;
+    std::set<std::string> attached_receivers_;
 
     // Received messages queue per receiver
     std::mutex recv_mutex_;
