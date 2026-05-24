@@ -299,7 +299,7 @@ AmqpConnection conn(<AmqpConnectionOptions>{
     @endcode
 
 */
-AmqpConnection::constructor(hash<AmqpConnectionOptions> options) {
+AmqpConnection::constructor(hash<AmqpConnectionOptions> options) [flags=NAMED_ARGS] {
     self->setPrivate(CID_AMQPCONNECTION, new QoreAmqpConnection(options, xsink));
 }
 
@@ -344,7 +344,7 @@ bool AmqpConnection::isConnected() [flags=CONSTANT] {
 
 //! Creates a sender link for the given address
 /** @param address the AMQP address to send messages to
-    @param opts optional sender options
+    @param options optional sender options
 
     @return the sender link name (used to identify this sender in send() calls)
 
@@ -357,13 +357,13 @@ string sender = conn.createSender("my-queue");
     @endcode
 
 */
-string AmqpConnection::createSender(string address, *hash<auto> opts) [dom=NETWORK] {
-    return conn->createSender(address->c_str(), opts, xsink);
+string AmqpConnection::createSender(string address, *hash<auto> options) [dom=NETWORK;flags=NAMED_ARGS] {
+    return conn->createSender(address->c_str(), options, xsink);
 }
 
 //! Creates a receiver link for the given address
 /** @param address the AMQP address to receive messages from
-    @param opts optional receiver options
+    @param options optional receiver options
 
     @return the receiver link name (used to identify this receiver in receive() calls)
 
@@ -376,8 +376,8 @@ string receiver = conn.createReceiver("my-queue");
     @endcode
 
 */
-string AmqpConnection::createReceiver(string address, *hash<AmqpReceiveOptions> opts) [dom=NETWORK] {
-    return conn->createReceiver(address->c_str(), opts, nullptr, xsink);
+string AmqpConnection::createReceiver(string address, *hash<AmqpReceiveOptions> options) [dom=NETWORK;flags=NAMED_ARGS] {
+    return conn->createReceiver(address->c_str(), options, nullptr, xsink);
 }
 
 //! Closes a sender link
@@ -392,7 +392,7 @@ conn.closeSender(sender);
     @endcode
 
 */
-nothing AmqpConnection::closeSender(string sender_name) {
+nothing AmqpConnection::closeSender(string sender_name) [flags=NAMED_ARGS] {
     conn->closeSender(sender_name->c_str(), xsink);
 }
 
@@ -408,14 +408,14 @@ conn.closeReceiver(receiver);
     @endcode
 
 */
-nothing AmqpConnection::closeReceiver(string receiver_name) {
+nothing AmqpConnection::closeReceiver(string receiver_name) [flags=NAMED_ARGS] {
     conn->closeReceiver(receiver_name->c_str(), xsink);
 }
 
 //! Sends a message using the named sender
 /** @param sender the sender link name (returned by createSender())
-    @param msg the message to send
-    @param opts optional send options
+    @param message the message to send
+    @param options optional send options
 
     @return delivery information for the sent message
 
@@ -428,8 +428,9 @@ hash<AmqpDeliveryInfo> info = conn.send(sender, new AmqpMessage("Hello!"));
     @endcode
 
 */
-hash<AmqpDeliveryInfo> AmqpConnection::send(string sender, AmqpMessage[QoreAmqpMessage] msg, *hash<AmqpSendOptions> opts) [dom=NETWORK] {
-    return conn->send(sender->c_str(), **msg, opts, xsink);
+hash<AmqpDeliveryInfo> AmqpConnection::send(string sender, AmqpMessage[QoreAmqpMessage] message,
+        *hash<AmqpSendOptions> options) [dom=NETWORK;flags=NAMED_ARGS] {
+    return conn->send(sender->c_str(), **message, options, xsink);
 }
 
 //! Sends a batch of messages efficiently
@@ -438,8 +439,8 @@ hash<AmqpDeliveryInfo> AmqpConnection::send(string sender, AmqpMessage[QoreAmqpM
     bulk publishing.
 
     @param sender the sender link name
-    @param msgs list of AmqpMessage objects to send
-    @param opts optional send options applied to all messages
+    @param messages list of AmqpMessage objects to send
+    @param options optional send options applied to all messages
 
     @return a list of delivery info hashes, one per message
 
@@ -452,8 +453,9 @@ list<AmqpMessage> batch = map new AmqpMessage(sprintf("msg-%d", $1)), xrange(100
 list<hash<AmqpDeliveryInfo>> results = conn.sendBatch(sender, batch);
     @endcode
 */
-list<hash<AmqpDeliveryInfo>> AmqpConnection::sendBatch(string sender, list<AmqpMessage> msgs, *hash<AmqpSendOptions> opts) [dom=NETWORK] {
-    return conn->sendBatch(sender->c_str(), msgs, opts, xsink);
+list<hash<AmqpDeliveryInfo>> AmqpConnection::sendBatch(string sender, list<AmqpMessage> messages,
+        *hash<AmqpSendOptions> options) [dom=NETWORK;flags=NAMED_ARGS] {
+    return conn->sendBatch(sender->c_str(), messages, options, xsink);
 }
 
 //! Receives a message from the named receiver
@@ -478,7 +480,7 @@ if (msg) {
     @endcode
 
 */
-*AmqpMessage AmqpConnection::receive(string receiver, timeout timeout) [dom=NETWORK] {
+*AmqpMessage AmqpConnection::receive(string receiver, timeout timeout) [dom=NETWORK;flags=NAMED_ARGS] {
     return conn->receive(self, receiver->c_str(), timeout, xsink);
 }
 
@@ -494,7 +496,7 @@ conn.accept(delivery_tag);
     @endcode
 
 */
-nothing AmqpConnection::accept(binary delivery_tag) {
+nothing AmqpConnection::accept(binary delivery_tag) [flags=NAMED_ARGS] {
     conn->accept(delivery_tag, xsink);
 }
 
@@ -510,7 +512,7 @@ conn.reject(delivery_tag);
     @endcode
 
 */
-nothing AmqpConnection::reject(binary delivery_tag) {
+nothing AmqpConnection::reject(binary delivery_tag) [flags=NAMED_ARGS] {
     conn->reject(delivery_tag, xsink);
 }
 
@@ -526,7 +528,7 @@ conn.release(delivery_tag);
     @endcode
 
 */
-nothing AmqpConnection::release(binary delivery_tag) {
+nothing AmqpConnection::release(binary delivery_tag) [flags=NAMED_ARGS] {
     conn->release(delivery_tag, xsink);
 }
 
@@ -545,7 +547,8 @@ conn.modify(delivery_tag, True, False);
     @endcode
 
 */
-nothing AmqpConnection::modify(binary delivery_tag, bool failed, bool undeliverable, *hash<auto> annotations) {
+nothing AmqpConnection::modify(binary delivery_tag, bool failed, bool undeliverable, *hash<auto> annotations)
+        [flags=NAMED_ARGS] {
     conn->modify(delivery_tag, failed, undeliverable, annotations, xsink);
 }
 
@@ -611,7 +614,7 @@ bool AmqpConnection::inTransaction() [flags=CONSTANT] {
 //! Creates a durable receiver (subscription persists across disconnects)
 /** @param address the AMQP address to receive messages from
     @param subscription_name a unique name for this durable subscription
-    @param opts optional receiver options
+    @param options optional receiver options
     @param filter optional filter options for message selection
 
     @return the receiver link name
@@ -625,8 +628,9 @@ string receiver = conn.createDurableReceiver("topic/news", "my-durable-sub");
     @endcode
 
 */
-string AmqpConnection::createDurableReceiver(string address, string subscription_name, *hash<AmqpReceiveOptions> opts, *hash<AmqpFilterOptions> filter) [dom=NETWORK] {
-    return conn->createDurableReceiver(address->c_str(), subscription_name->c_str(), opts, filter, xsink);
+string AmqpConnection::createDurableReceiver(string address, string subscription_name,
+        *hash<AmqpReceiveOptions> options, *hash<AmqpFilterOptions> filter) [dom=NETWORK;flags=NAMED_ARGS] {
+    return conn->createDurableReceiver(address->c_str(), subscription_name->c_str(), options, filter, xsink);
 }
 
 //! Closes a durable receiver without unsubscribing
@@ -643,7 +647,7 @@ conn.closeDurableReceiver(receiver);
     @endcode
 
 */
-nothing AmqpConnection::closeDurableReceiver(string receiver_name) {
+nothing AmqpConnection::closeDurableReceiver(string receiver_name) [flags=NAMED_ARGS] {
     conn->closeDurableReceiver(receiver_name->c_str(), xsink);
 }
 
@@ -659,7 +663,7 @@ conn.unsubscribeDurable("my-durable-sub");
     @endcode
 
 */
-nothing AmqpConnection::unsubscribeDurable(string subscription_name) [dom=NETWORK] {
+nothing AmqpConnection::unsubscribeDurable(string subscription_name) [dom=NETWORK;flags=NAMED_ARGS] {
     conn->unsubscribeDurable(subscription_name->c_str(), xsink);
 }
 
@@ -694,7 +698,7 @@ list<hash<AmqpQueueInfo>> queues = conn.queryQueues("my-address");
     @endcode
 
 */
-list<hash<AmqpQueueInfo>> AmqpConnection::queryQueues(*string address) [dom=NETWORK] {
+list<hash<AmqpQueueInfo>> AmqpConnection::queryQueues(*string address) [dom=NETWORK;flags=NAMED_ARGS] {
     return conn->queryQueues(address ? address->c_str() : nullptr, xsink);
 }
 
@@ -711,7 +715,7 @@ list<hash<AmqpQueueInfo>> AmqpConnection::queryQueues(*string address) [dom=NETW
     @endcode
 
 */
-*hash<auto> AmqpConnection::getAddressInfo(string address) [dom=NETWORK] {
+*hash<auto> AmqpConnection::getAddressInfo(string address) [dom=NETWORK;flags=NAMED_ARGS] {
     return conn->getAddressInfo(address->c_str(), xsink);
 }
 
@@ -728,7 +732,7 @@ list<hash<AmqpQueueInfo>> AmqpConnection::queryQueues(*string address) [dom=NETW
     @endcode
 
 */
-*hash<auto> AmqpConnection::getQueueInfo(string queue) [dom=NETWORK] {
+*hash<auto> AmqpConnection::getQueueInfo(string queue) [dom=NETWORK;flags=NAMED_ARGS] {
     return conn->getQueueInfo(queue->c_str(), xsink);
 }
 
@@ -779,6 +783,6 @@ list<hash<auto>> AmqpConnection::getConnectionEvents() [flags=RET_VALUE_ONLY] {
 conn.setAutoRecoverLinks(False);  # manual link management
     @endcode
 */
-nothing AmqpConnection::setAutoRecoverLinks(bool recover) {
+nothing AmqpConnection::setAutoRecoverLinks(bool recover) [flags=NAMED_ARGS] {
     conn->setAutoRecoverLinks(recover);
 }

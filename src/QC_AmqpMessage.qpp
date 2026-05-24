@@ -115,7 +115,7 @@ AmqpMessage msg2({"key": "value"}, <AmqpMessageProperties>{"content_type": "appl
     @endcode
 
 */
-AmqpMessage::constructor(auto body, *hash<AmqpMessageProperties> properties) {
+AmqpMessage::constructor(auto body, *hash<AmqpMessageProperties> properties) [flags=NAMED_ARGS] {
     self->setPrivate(CID_AMQPMESSAGE, new QoreAmqpMessage(body, properties, xsink));
 }
 
