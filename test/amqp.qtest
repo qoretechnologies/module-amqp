@@ -84,6 +84,8 @@ public class AmqpTest inherits QUnit::Test {
 
         # Delivery tag tests
         addTestCase("getDeliveryTag on created message", \testDeliveryTagCreatedMessage());
+        addTestCase("named argument calls", \testNamedArguments());
+        addTestCase("named argument surface parses", \testNamedArgumentSurfaceParses());
 
         # URL credential extraction tests
         addTestCase("URL with credentials", \testUrlCredentials());
@@ -541,6 +543,76 @@ public class AmqpTest inherits QUnit::Test {
 
         AmqpMessage msg2(42, <AmqpMessageProperties>{"message_id": "test-id"});
         assertNothing(msg2.getDeliveryTag());
+    }
+
+    testNamedArguments() {
+        AmqpMessage msg(body: {"kind": "event", "id": 7}, properties: <AmqpMessageProperties>{
+            "content_type": "application/json",
+            "message_id": "named-001",
+            "subject": "named-call",
+        });
+        hash<auto> body = msg.getBody();
+        assertEq("event", body.kind, "AmqpMessage constructor accepts body:");
+        assertEq(7, body.id, "AmqpMessage constructor preserves named body");
+        assertEq("application/json", msg.getContentType(), "AmqpMessage constructor accepts properties:");
+        assertEq("named-001", msg.getMessageId(), "message properties preserved with named constructor");
+        assertEq("named-call", msg.getSubject(), "message subject preserved with named constructor");
+
+        AmqpConnection conn(options: <AmqpConnectionOptions>{
+            "url": "amqp://localhost:5672",
+        });
+        assertEq(False, conn.isConnected(), "AmqpConnection constructor accepts options:");
+        conn.setAutoRecoverLinks(recover: False);
+        conn.setAutoRecoverLinks(recover: True);
+
+        assertThrows("AMQP-CONNECTION-ERROR", sub() {
+            conn.createSender(address: "named-sender", options: {});
+        }, NOTHING, "createSender() accepts named arguments");
+
+        assertThrows("AMQP-CONNECTION-ERROR", sub() {
+            conn.createReceiver(address: "named-receiver", options: <AmqpReceiveOptions>{});
+        }, NOTHING, "createReceiver() accepts named arguments");
+
+        assertThrows("AMQP-CONNECTION-ERROR", sub() {
+            conn.closeSender(sender_name: "missing-sender");
+        }, NOTHING, "closeSender() accepts named arguments");
+
+        assertThrows("AMQP-CONNECTION-ERROR", sub() {
+            conn.closeReceiver(receiver_name: "missing-receiver");
+        }, NOTHING, "closeReceiver() accepts named arguments");
+    }
+
+    testNamedArgumentSurfaceParses() {
+        Program p(PO_NEW_STYLE);
+        p.loadModule("amqp");
+        p.parse("
+sub named_amqp_calls() {
+    AmqpConnection conn(options: <AmqpConnectionOptions>{'url': 'amqp://localhost:5672'});
+    AmqpMessage message(body: 'payload', properties: <AmqpMessageProperties>{'message_id': 'id-1'});
+    string sender = conn.createSender(address: 'events', options: {});
+    string receiver = conn.createReceiver(address: 'events', options: <AmqpReceiveOptions>{'credit': 10});
+    conn.closeSender(sender_name: sender);
+    conn.closeReceiver(receiver_name: receiver);
+    hash<AmqpDeliveryInfo> info = conn.send(sender: sender, message: message,
+        options: <AmqpSendOptions>{'durable': True});
+    list<AmqpMessage> messages = (message,);
+    list<hash<AmqpDeliveryInfo>> batch = conn.sendBatch(sender: sender, messages: messages,
+        options: <AmqpSendOptions>{'priority': 5});
+    *AmqpMessage incoming = conn.receive(receiver: receiver, timeout: 1s);
+    conn.accept(delivery_tag: <01>);
+    conn.reject(delivery_tag: <02>);
+    conn.release(delivery_tag: <03>);
+    conn.modify(delivery_tag: <04>, failed: True, undeliverable: False, annotations: {'reason': 'invalid'});
+    string durable = conn.createDurableReceiver(address: 'events', subscription_name: 'sub',
+        options: <AmqpReceiveOptions>{'shared': True}, filter: <AmqpFilterOptions>{'selector': \"color = 'blue'\"});
+    conn.closeDurableReceiver(receiver_name: durable);
+    conn.unsubscribeDurable(subscription_name: 'sub');
+    list<hash<AmqpQueueInfo>> queues = conn.queryQueues(address: 'events');
+    *hash<auto> address_info = conn.getAddressInfo(address: 'events');
+    *hash<auto> queue_info = conn.getQueueInfo(queue: 'events');
+    conn.setAutoRecoverLinks(recover: True);
+}
+", "amqp-named-arguments");
     }
 
     # --- URL credential extraction tests ---
