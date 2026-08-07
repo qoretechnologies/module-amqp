@@ -36,6 +36,9 @@ cmake .. -DCMAKE_BUILD_TYPE=debug -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
 make -j${MAKE_JOBS}
 make install
 
+# Verify that source-owned provider presentation catalogs match this checkout.
+${MODULE_SRC_DIR}/test/docker_test/check-i18n.sh
+
 # create and start Artemis broker instance (Artemis pre-installed in deps image)
 echo && echo "-- starting Artemis broker --"
 ${ARTEMIS_HOME}/bin/artemis create /tmp/amqp-broker \
