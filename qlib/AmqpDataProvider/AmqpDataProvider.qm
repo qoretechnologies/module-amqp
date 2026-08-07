@@ -47,6 +47,7 @@ module AmqpDataProvider {
         # Register app in action catalog
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": AmqpDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "AMQP 1.0 Message Broker",
             "short_desc": "Send and receive messages via AMQP 1.0",
             "desc": "Connect to any [AMQP 1.0](https://www.amqp.org/) message broker "
