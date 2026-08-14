@@ -1,0 +1,213 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.QU1RUA.action.c2VuZA.desc": {
+          "source": "Sends a message to the specified AMQP address (queue or topic).\n\nThe message **body** is required and can be any type — a string, structured data (hash/list), binary, or scalar value. Use `content_type` to indicate the format (e.g., `application/json`).\n\n**Common scenarios**:\n- Send an order event: `{\"order_id\": 123, \"total\": 49.99}` with `content_type: application/json`\n- Send a notification: `\"Low inventory alert\"` with `subject: alerts.inventory`\n- Send a binary payload: raw file data with `content_type: application/octet-stream`\n\nThe response indicates whether the broker **accepted** the message.",
+          "message": "지정한 AMQP 주소(큐 또는 토픽)로 메시지를 전송합니다.\n\n메시지 **body**는 필수 항목이며 문자열, 구조화된 데이터(해시/리스트), 바이너리 또는 스칼라 값 등 모든 유형이 될 수 있습니다. `content_type`(예: `application/json`)을(를) 사용하여 형식을 지정하십시오.\n\n**일반적인 시나리오**:\n- 주문 이벤트 전송: `content_type: application/json`이(가) 포함된 `{\"order_id\": 123, \"total\": 49.99}`\n- 알림 전송: `subject: alerts.inventory`이(가) 포함된 `\"Low inventory alert\"`\n- 바이너리 페이로드 전송: `content_type: application/octet-stream`이(가) 포함된 원시 파일 데이터\n\n응답은 브로커가 메시지를 **수락**했는지 여부를 나타냅니다."
+        },
+        "app.QU1RUA.action.c2VuZA.display_name": {
+          "source": "Send Message",
+          "message": "메시지 전송"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ.desc": {
+          "source": "Raw binary message body (e.g., images, serialized objects)",
+          "message": "원시 바이너리 메시지 본문(예: 이미지, 직렬화된 객체)"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ.display_name": {
+          "source": "Binary",
+          "message": "바이너리"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ.short_desc": {
+          "source": "Raw binary data",
+          "message": "원시 바이너리 데이터"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL2pzb24.desc": {
+          "source": "Message body encoded as JSON (JavaScript Object Notation)",
+          "message": "JSON(JavaScript Object Notation)으로 인코딩된 메시지 본문"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL2pzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL2pzb24.short_desc": {
+          "source": "JSON-encoded data",
+          "message": "JSON 인코딩 데이터"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3htbA.desc": {
+          "source": "Message body encoded as XML",
+          "message": "XML로 인코딩된 메시지 본문"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3htbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3htbA.short_desc": {
+          "source": "XML-encoded data",
+          "message": "XML 인코딩 데이터"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3lhbWw.desc": {
+          "source": "Message body encoded as YAML",
+          "message": "YAML로 인코딩된 메시지 본문"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3lhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3lhbWw.short_desc": {
+          "source": "YAML-encoded data",
+          "message": "YAML 인코딩 데이터"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text message body",
+          "message": "일반 텍스트 메시지 본문"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "UTF-8 plain text",
+          "message": "UTF-8 일반 텍스트"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME content type describing the format of the message body.\n\nSetting this helps consumers know how to interpret the message. Common values include `text/plain` for simple text, `application/json` for structured data, and `application/octet-stream` for binary payloads.",
+          "message": "메시지 본문의 형식을 설명하는 MIME 콘텐츠 유형입니다.\n\n이 값을 설정하면 수신자가 메시지를 해석하는 방법을 파악하는 데 도움이 됩니다. 일반적인 값으로는 단순 텍스트의 경우 `text/plain`, 구조화된 데이터의 경우 `application/json`, 바이너리 페이로드의 경우 `application/octet-stream` 등이 있습니다."
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "MIME type of the message body",
+          "message": "메시지 본문의 MIME 유형"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29ycmVsYXRpb25faWQ.desc": {
+          "source": "An identifier that links this message to a related message, typically used in request-reply patterns.\n\nSet this to the `message_id` of the original request when sending a reply, so the requester can match the response.",
+          "message": "이 메시지를 관련 메시지와 연결하는 식별자로, 주로 요청-응답 패턴에서 사용됩니다.\n\n답신을 보낼 때 요청자가 응답을 맞출 수 있도록 이 값을 원본 요청의 `message_id`(으)로 설정하세요."
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29ycmVsYXRpb25faWQ.display_name": {
+          "source": "Correlation ID",
+          "message": "상관관계 ID"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29ycmVsYXRpb25faWQ.short_desc": {
+          "source": "Links related messages together",
+          "message": "관련 메시지를 서로 연결합니다"
+        },
+        "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.desc": {
+          "source": "The AMQP address (queue or topic name) where the message will be published.\n\nMessages sent to a **queue** are delivered to a single consumer (point-to-point). Messages sent to a **topic** are delivered to all subscribers (publish-subscribe).",
+          "message": "메시지가 게시될 AMQP 주소(큐 또는 토픽 이름)입니다.\n\n**큐**로 전송된 메시지는 단일 소비자에게 전달됩니다(점대점). **토픽**으로 전송된 메시지는 모든 구독자에게 전달됩니다(발행-구독)."
+        },
+        "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.display_name": {
+          "source": "AMQP Address",
+          "message": "AMQP 주소"
+        },
+        "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.short_desc": {
+          "source": "The queue or topic to send to",
+          "message": "전송할 큐 또는 토픽"
+        },
+        "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.desc": {
+          "source": "A hash of custom key-value properties attached to the message.\n\nUse application properties to add business-specific metadata such as customer IDs, priority levels, or processing flags. These properties can be used by consumers for filtering and routing.",
+          "message": "메시지에 첨부된 사용자 지정 키-값 속성의 해시입니다.\n\n애플리케이션 속성을 사용하여 고객 ID, 우선순위 수준 또는 처리 플래그와 같은 비즈니스 특화 메타데이터를 추가하세요. 이러한 속성은 소비자가 필터링 및 라우팅에 사용할 수 있습니다."
+        },
+        "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.display_name": {
+          "source": "Application Properties",
+          "message": "애플리케이션 속성"
+        },
+        "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.short_desc": {
+          "source": "Custom key-value metadata",
+          "message": "사용자 지정 키-값 메타데이터"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Ym9keQ.desc": {
+          "source": "The message body to send to the AMQP address.\n\nCan be any serializable type:\n- **String**: plain text or encoded data (JSON, XML, YAML)\n- **Hash**: structured data (automatically encoded as AMQP map)\n- **List**: ordered collection\n- **Binary**: raw binary data\n- **Integer, float, boolean, date**: scalar values",
+          "message": "AMQP 주소로 보낼 메시지 본문입니다.\n\n직렬화 가능한 모든 유형이 가능합니다:\n- **문자열**: 일반 텍스트 또는 인코딩된 데이터(JSON, XML, YAML)\n- **해시**: 구조화된 데이터(AMQP 맵으로 자동 인코딩됨)\n- **리스트**: 정렬된 컬렉션\n- **바이너리**: 원시 바이너리 데이터\n- **정수, 부동소수점, 불리언, 날짜**: 스칼라 값"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "메시지 본문"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Ym9keQ.short_desc": {
+          "source": "The message payload to send",
+          "message": "전송할 메시지 페이로드"
+        },
+        "app.QU1RUA.action.c2VuZA.option.bWVzc2FnZV9pZA.desc": {
+          "source": "A unique identifier for this message, used for deduplication and tracking.\n\nIf not provided, the broker may assign one automatically. Use a UUID or application-specific format for reliable tracking.",
+          "message": "중복 제거 및 추적에 사용되는 이 메시지의 고유 식별자입니다.\n\n제공되지 않으면 브로커가 자동으로 하나를 할당할 수 있습니다. 신뢰할 수 있는 추적을 위해 UUID 또는 애플리케이션 특화 형식을 사용하세요."
+        },
+        "app.QU1RUA.action.c2VuZA.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "메시지 ID"
+        },
+        "app.QU1RUA.action.c2VuZA.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "Unique identifier for the message",
+          "message": "메시지의 고유 식별자"
+        },
+        "app.QU1RUA.action.c2VuZA.option.c3ViamVjdA.desc": {
+          "source": "The subject of the message, which can be used for content-based routing or categorization.\n\nSome brokers use this as a routing key to direct messages to specific queues or consumers.",
+          "message": "콘텐츠 기반 라우팅 또는 분류에 사용할 수 있는 메시지의 제목입니다.\n\n일부 브로커는 이를 라우팅 키로 사용하여 메시지를 특정 큐나 소비자로 전달합니다."
+        },
+        "app.QU1RUA.action.c2VuZA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "제목"
+        },
+        "app.QU1RUA.action.c2VuZA.option.c3ViamVjdA.short_desc": {
+          "source": "Message subject or routing key",
+          "message": "메시지 제목 또는 라우팅 키"
+        },
+        "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.desc": {
+          "source": "The AMQP address where replies to this message should be sent.\n\nUsed in request-reply patterns to tell the receiver where to send the response.",
+          "message": "이 메시지에 대한 답신을 보내야 하는 AMQP 주소입니다.\n\n요청-응답 패턴에서 수신자에게 응답을 보낼 위치를 알려주는 데 사용됩니다."
+        },
+        "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.display_name": {
+          "source": "Reply-To Address",
+          "message": "답신 수신 주소"
+        },
+        "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.short_desc": {
+          "source": "Address for reply messages",
+          "message": "답신 메시지용 주소"
+        },
+        "app.QU1RUA.action.c2VuZA.short_desc": {
+          "source": "Publish a message to an AMQP queue or topic",
+          "message": "AMQP 큐 또는 토픽에 메시지 게시"
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.desc": {
+          "source": "Observes incoming messages on the specified AMQP address and fires an event for each message received.\n\nEach event includes the message `body`, `content_type`, `message_id`, `correlation_id`, `reply_to`, `subject`, and any custom `application_properties` set by the sender.\n\n**Use this to**:\n- Process orders as they arrive on a queue\n- React to notifications from a topic\n- Trigger workflows when integration messages are received",
+          "message": "지정된 AMQP 주소에서 수신되는 메시지를 감시하고 수신된 각 메시지에 대해 이벤트를 발생시킵니다.\n\n각 이벤트에는 메시지 `body`, `content_type`, `message_id`, `correlation_id`, `reply_to`, `subject` 및 발신자가 설정한 사용자 지정 `application_properties`이(가) 포함됩니다.\n\n**다음 용도로 사용**:\n- 큐에 도달하는 주문 처리\n- 토픽의 알림에 반응\n- 연동 메시지가 수신될 때 워크플로 트리거"
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.display_name": {
+          "source": "Receive Messages",
+          "message": "메시지 수신"
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.desc": {
+          "source": "The AMQP address (queue or topic name) to listen on for incoming messages.\n\nMessages are delivered as events whenever they arrive on this address.",
+          "message": "수신 메시지를 수신 대기할 AMQP 주소(큐 또는 토픽 이름)입니다.\n\n메시지가 이 주소에 도착할 때마다 이벤트로 전달됩니다."
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.display_name": {
+          "source": "AMQP Address",
+          "message": "AMQP 주소"
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.short_desc": {
+          "source": "The queue or topic to receive from",
+          "message": "수신할 큐 또는 토픽"
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.short_desc": {
+          "source": "Listen for incoming messages on an AMQP address",
+          "message": "AMQP 주소에서 수신 메시지 수신 대기"
+        },
+        "app.QU1RUA.desc": {
+          "source": "Connect to any [AMQP 1.0](https://www.amqp.org/) message broker (Apache ActiveMQ Artemis, RabbitMQ, Azure Service Bus, Amazon MQ, etc.) to integrate messaging into your workflows.\n\n**Use cases**:\n- **Order processing**: send order events to a queue for async processing\n- **Notifications**: publish alerts and notifications to topic subscribers\n- **System integration**: exchange data between microservices via message queues\n- **Event-driven workflows**: trigger actions when messages arrive\n\n**Supported operations**:\n- **Send**: publish messages to any address with full property support\n- **Receive**: observe incoming messages as real-time events\n- **Auto-discovery**: automatically discover broker addresses via the AMQP Management Protocol\n\nSupports both `amqp://` (plaintext) and `amqps://` (TLS-encrypted) connections.",
+          "message": "모든 [AMQP 1.0](https://www.amqp.org/) 메시지 브로커(Apache ActiveMQ Artemis, RabbitMQ, Azure Service Bus, Amazon MQ 등)에 연결하여 워크플로에 메시징을 통합합니다.\n\n**사용 사례**:\n- **주문 처리**: 비동기 처리를 위해 주문 이벤트를 큐로 전송\n- **알림**: 토픽 구독자에게 경고 및 알림 게시\n- **시스템 연동**: 메시지 큐를 통해 마이크로서비스 간에 데이터 교환\n- **이벤트 기반 워크플로**: 메시지가 도착할 때 작업 트리거\n\n**지원되는 작업**:\n- **전송**: 전체 속성 지원과 함께 모든 주소로 메시지 게시\n- **수신**: 수신 메시지를 실시간 이벤트로 감시\n- **자동 검색**: AMQP Management Protocol을 통해 브로커 주소를 자동으로 검색\n\n`amqp://`(일반 텍스트) 및 `amqps://`(TLS 암호화) 연결을 모두 지원합니다."
+        },
+        "app.QU1RUA.display_name": {
+          "source": "AMQP 1.0 Message Broker",
+          "message": "AMQP 1.0 메시지 브로커"
+        },
+        "app.QU1RUA.short_desc": {
+          "source": "Send and receive messages via AMQP 1.0",
+          "message": "AMQP 1.0을 통해 메시지 전송 및 수신"
+        }
+      }
+    }
+  }
+}

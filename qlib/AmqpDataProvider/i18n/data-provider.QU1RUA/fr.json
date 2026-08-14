@@ -1,0 +1,213 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.QU1RUA.action.c2VuZA.desc": {
+          "source": "Sends a message to the specified AMQP address (queue or topic).\n\nThe message **body** is required and can be any type — a string, structured data (hash/list), binary, or scalar value. Use `content_type` to indicate the format (e.g., `application/json`).\n\n**Common scenarios**:\n- Send an order event: `{\"order_id\": 123, \"total\": 49.99}` with `content_type: application/json`\n- Send a notification: `\"Low inventory alert\"` with `subject: alerts.inventory`\n- Send a binary payload: raw file data with `content_type: application/octet-stream`\n\nThe response indicates whether the broker **accepted** the message.",
+          "message": "Envoie un message à l'adresse AMQP spécifiée (file d'attente ou sujet).\n\nLe **corps** du message est requis et peut être de n'importe quel type — une chaîne, des données structurées (hachage/liste), du binaire ou une valeur scalaire. Utilisez `content_type` pour indiquer le format (par ex. `application/json`).\n\n**Scénarios courants** :\n- Envoyer un événement de commande : `{\"order_id\": 123, \"total\": 49.99}` avec `content_type: application/json`\n- Envoyer une notification : `\"Low inventory alert\"` avec `subject: alerts.inventory`\n- Envoyer une charge utile binaire : données de fichier brutes avec `content_type: application/octet-stream`\n\nLa réponse indique si le courtier a **accepté** le message."
+        },
+        "app.QU1RUA.action.c2VuZA.display_name": {
+          "source": "Send Message",
+          "message": "Envoyer un message"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ.desc": {
+          "source": "Raw binary message body (e.g., images, serialized objects)",
+          "message": "Corps de message binaire brut (par ex. images, objets sérialisés)"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ.display_name": {
+          "source": "Binary",
+          "message": "Binaire"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ.short_desc": {
+          "source": "Raw binary data",
+          "message": "Données binaires brutes"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL2pzb24.desc": {
+          "source": "Message body encoded as JSON (JavaScript Object Notation)",
+          "message": "Corps du message encodé en JSON (JavaScript Object Notation)"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL2pzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL2pzb24.short_desc": {
+          "source": "JSON-encoded data",
+          "message": "Données encodées en JSON"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3htbA.desc": {
+          "source": "Message body encoded as XML",
+          "message": "Corps du message encodé en XML"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3htbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3htbA.short_desc": {
+          "source": "XML-encoded data",
+          "message": "Données encodées en XML"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3lhbWw.desc": {
+          "source": "Message body encoded as YAML",
+          "message": "Corps du message encodé en YAML"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3lhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3lhbWw.short_desc": {
+          "source": "YAML-encoded data",
+          "message": "Données encodées en YAML"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text message body",
+          "message": "Corps du message en texte brut"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "Plain Text",
+          "message": "Texte brut"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "UTF-8 plain text",
+          "message": "Texte brut UTF-8"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME content type describing the format of the message body.\n\nSetting this helps consumers know how to interpret the message. Common values include `text/plain` for simple text, `application/json` for structured data, and `application/octet-stream` for binary payloads.",
+          "message": "Le type de contenu MIME décrivant le format du corps du message.\n\nDéfinir cette option aide les consommateurs à savoir comment interpréter le message. Les valeurs courantes incluent `text/plain` pour du texte simple, `application/json` pour des données structurées et `application/octet-stream` pour des charges utiles binaires."
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Type de contenu"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "MIME type of the message body",
+          "message": "Type MIME du corps du message"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29ycmVsYXRpb25faWQ.desc": {
+          "source": "An identifier that links this message to a related message, typically used in request-reply patterns.\n\nSet this to the `message_id` of the original request when sending a reply, so the requester can match the response.",
+          "message": "Un identifiant qui relie ce message à un message associé, généralement utilisé dans les schémas requête-réponse.\n\nDéfinissez cette option sur le `message_id` de la requête d'origine lors de l'envoi d'une réponse, afin que le demandeur puisse faire correspondre la réponse."
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29ycmVsYXRpb25faWQ.display_name": {
+          "source": "Correlation ID",
+          "message": "ID de corrélation"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29ycmVsYXRpb25faWQ.short_desc": {
+          "source": "Links related messages together",
+          "message": "Relie les messages associés entre eux"
+        },
+        "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.desc": {
+          "source": "The AMQP address (queue or topic name) where the message will be published.\n\nMessages sent to a **queue** are delivered to a single consumer (point-to-point). Messages sent to a **topic** are delivered to all subscribers (publish-subscribe).",
+          "message": "L'adresse AMQP (nom de la file d'attente ou du sujet) où le message sera publié.\n\nLes messages envoyés à une **file d'attente** sont distribués à un seul consommateur (point à point). Les messages envoyés à un **sujet** sont distribués à tous les abonnés (publication-abonnement)."
+        },
+        "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.display_name": {
+          "source": "AMQP Address",
+          "message": "Adresse AMQP"
+        },
+        "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.short_desc": {
+          "source": "The queue or topic to send to",
+          "message": "La file d'attente ou le sujet auquel envoyer"
+        },
+        "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.desc": {
+          "source": "A hash of custom key-value properties attached to the message.\n\nUse application properties to add business-specific metadata such as customer IDs, priority levels, or processing flags. These properties can be used by consumers for filtering and routing.",
+          "message": "Un hachage de propriétés clé-valeur personnalisées jointes au message.\n\nUtilisez les propriétés d'application pour ajouter des métadonnées spécifiques à l'entreprise, telles que des identifiants clients, des niveaux de priorité ou des indicateurs de traitement. Ces propriétés peuvent être utilisées par les consommateurs pour le filtrage et l'acheminement."
+        },
+        "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.display_name": {
+          "source": "Application Properties",
+          "message": "Propriétés d'application"
+        },
+        "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.short_desc": {
+          "source": "Custom key-value metadata",
+          "message": "Métadonnées clé-valeur personnalisées"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Ym9keQ.desc": {
+          "source": "The message body to send to the AMQP address.\n\nCan be any serializable type:\n- **String**: plain text or encoded data (JSON, XML, YAML)\n- **Hash**: structured data (automatically encoded as AMQP map)\n- **List**: ordered collection\n- **Binary**: raw binary data\n- **Integer, float, boolean, date**: scalar values",
+          "message": "Le corps du message à envoyer à l'adresse AMQP.\n\nPeut être n'importe quel type sérialisable :\n- **String** : texte brut ou données encodées (JSON, XML, YAML)\n- **Hash** : données structurées (automatiquement encodées sous forme de carte AMQP)\n- **List** : collection ordonnée\n- **Binary** : données binaires brutes\n- **Integer, float, boolean, date** : valeurs scalaires"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Corps du message"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Ym9keQ.short_desc": {
+          "source": "The message payload to send",
+          "message": "La charge utile du message à envoyer"
+        },
+        "app.QU1RUA.action.c2VuZA.option.bWVzc2FnZV9pZA.desc": {
+          "source": "A unique identifier for this message, used for deduplication and tracking.\n\nIf not provided, the broker may assign one automatically. Use a UUID or application-specific format for reliable tracking.",
+          "message": "Un identifiant unique pour ce message, utilisé pour la déduplication et le suivi.\n\nS'il n'est pas fourni, le courtier peut en attribuer un automatiquement. Utilisez un UUID ou un format spécifique à l'application pour un suivi fiable."
+        },
+        "app.QU1RUA.action.c2VuZA.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "ID de message"
+        },
+        "app.QU1RUA.action.c2VuZA.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "Unique identifier for the message",
+          "message": "Identifiant unique pour le message"
+        },
+        "app.QU1RUA.action.c2VuZA.option.c3ViamVjdA.desc": {
+          "source": "The subject of the message, which can be used for content-based routing or categorization.\n\nSome brokers use this as a routing key to direct messages to specific queues or consumers.",
+          "message": "Le sujet du message, qui peut être utilisé pour le routage basé sur le contenu ou la catégorisation.\n\nCertains courtiers l'utilisent comme clé de routage pour diriger les messages vers des files d'attente ou des consommateurs spécifiques."
+        },
+        "app.QU1RUA.action.c2VuZA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Sujet"
+        },
+        "app.QU1RUA.action.c2VuZA.option.c3ViamVjdA.short_desc": {
+          "source": "Message subject or routing key",
+          "message": "Sujet du message ou clé de routage"
+        },
+        "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.desc": {
+          "source": "The AMQP address where replies to this message should be sent.\n\nUsed in request-reply patterns to tell the receiver where to send the response.",
+          "message": "L'adresse AMQP à laquelle les réponses à ce message doivent être envoyées.\n\nUtilisé dans les schémas requête-réponse pour indiquer au destinataire où envoyer la réponse."
+        },
+        "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.display_name": {
+          "source": "Reply-To Address",
+          "message": "Adresse de réponse"
+        },
+        "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.short_desc": {
+          "source": "Address for reply messages",
+          "message": "Adresse pour les messages de réponse"
+        },
+        "app.QU1RUA.action.c2VuZA.short_desc": {
+          "source": "Publish a message to an AMQP queue or topic",
+          "message": "Publier un message sur une file d'attente ou un sujet AMQP"
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.desc": {
+          "source": "Observes incoming messages on the specified AMQP address and fires an event for each message received.\n\nEach event includes the message `body`, `content_type`, `message_id`, `correlation_id`, `reply_to`, `subject`, and any custom `application_properties` set by the sender.\n\n**Use this to**:\n- Process orders as they arrive on a queue\n- React to notifications from a topic\n- Trigger workflows when integration messages are received",
+          "message": "Observe les messages entrants sur l'adresse AMQP spécifiée et déclenche un événement pour chaque message reçu.\n\nChaque événement inclut le message `body`, `content_type`, `message_id`, `correlation_id`, `reply_to`, `subject`, ainsi que toute option `application_properties` personnalisée définie par l'expéditeur.\n\n**Utilisez ceci pour** :\n- Traiter les commandes au fur et à mesure qu'elles arrivent dans une file d'attente\n- Réagir aux notifications d'un sujet\n- Déclencher des flux de travail lorsque des messages d'intégration sont reçus"
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.display_name": {
+          "source": "Receive Messages",
+          "message": "Recevoir des messages"
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.desc": {
+          "source": "The AMQP address (queue or topic name) to listen on for incoming messages.\n\nMessages are delivered as events whenever they arrive on this address.",
+          "message": "L'adresse AMQP (nom de la file d'attente ou du sujet) à écouter pour les messages entrants.\n\nLes messages sont distribués sous forme d'événements dès qu'ils arrivent à cette adresse."
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.display_name": {
+          "source": "AMQP Address",
+          "message": "Adresse AMQP"
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.short_desc": {
+          "source": "The queue or topic to receive from",
+          "message": "La file d'attente ou le sujet d'où recevoir"
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.short_desc": {
+          "source": "Listen for incoming messages on an AMQP address",
+          "message": "Écouter les messages entrants sur une adresse AMQP"
+        },
+        "app.QU1RUA.desc": {
+          "source": "Connect to any [AMQP 1.0](https://www.amqp.org/) message broker (Apache ActiveMQ Artemis, RabbitMQ, Azure Service Bus, Amazon MQ, etc.) to integrate messaging into your workflows.\n\n**Use cases**:\n- **Order processing**: send order events to a queue for async processing\n- **Notifications**: publish alerts and notifications to topic subscribers\n- **System integration**: exchange data between microservices via message queues\n- **Event-driven workflows**: trigger actions when messages arrive\n\n**Supported operations**:\n- **Send**: publish messages to any address with full property support\n- **Receive**: observe incoming messages as real-time events\n- **Auto-discovery**: automatically discover broker addresses via the AMQP Management Protocol\n\nSupports both `amqp://` (plaintext) and `amqps://` (TLS-encrypted) connections.",
+          "message": "Connectez-vous à n'importe quel courtier de messages [AMQP 1.0](https://www.amqp.org/) (Apache ActiveMQ Artemis, RabbitMQ, Azure Service Bus, Amazon MQ, etc.) pour intégrer de la messagerie à vos flux de travail.\n\n**Cas d'utilisation** :\n- **Traitement des commandes** : envoyez des événements de commande à une file d'attente pour un traitement asynchrone\n- **Notifications** : publiez des alertes et des notifications aux abonnés du sujet\n- **Intégration système** : échangez des données entre microservices via des files d'attente de messages\n- **Flux de travail pilotés par les événements** : déclenchez des actions à l'arrivée des messages\n\n**Opérations prises en charge** :\n- **Envoyer** : publiez des messages à n'importe quelle adresse avec une prise en charge complète des propriétés\n- **Recevoir** : observez les messages entrants en tant qu'événements en temps réel\n- **Découverte automatique** : découvrez automatiquement les adresses des courtiers via le protocole d'administration AMQP\n\nPrend en charge les connexions `amqp://` (texte brut) et `amqps://` (chiffrées par TLS)."
+        },
+        "app.QU1RUA.display_name": {
+          "source": "AMQP 1.0 Message Broker",
+          "message": "Courtier de messages AMQP 1.0"
+        },
+        "app.QU1RUA.short_desc": {
+          "source": "Send and receive messages via AMQP 1.0",
+          "message": "Envoyer et recevoir des messages via AMQP 1.0"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,213 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.QU1RUA.action.c2VuZA.desc": {
+          "source": "Sends a message to the specified AMQP address (queue or topic).\n\nThe message **body** is required and can be any type — a string, structured data (hash/list), binary, or scalar value. Use `content_type` to indicate the format (e.g., `application/json`).\n\n**Common scenarios**:\n- Send an order event: `{\"order_id\": 123, \"total\": 49.99}` with `content_type: application/json`\n- Send a notification: `\"Low inventory alert\"` with `subject: alerts.inventory`\n- Send a binary payload: raw file data with `content_type: application/octet-stream`\n\nThe response indicates whether the broker **accepted** the message.",
+          "message": "Надсилає повідомлення на вказану адресу AMQP (чергу або тему).\n\nТіло повідомлення (**body**) є обов'язковим і може бути будь-якого типу — рядок, структуровані дані (хеш/список), бінарні дані або скалярне значення. Використовуйте `content_type`, щоб вказати формат (наприклад, `application/json`).\n\n**Типові сценарії**:\n- Надіслати подію замовлення: `{\"order_id\": 123, \"total\": 49.99}` з `content_type: application/json`\n- Надіслати сповіщення: `\"Low inventory alert\"` з `subject: alerts.inventory`\n- Надіслати бінарне корисне навантаження: сирі дані файлу з `content_type: application/octet-stream`\n\nВідповідь вказує, чи брокер **прийняв** повідомлення."
+        },
+        "app.QU1RUA.action.c2VuZA.display_name": {
+          "source": "Send Message",
+          "message": "Надіслати повідомлення"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ.desc": {
+          "source": "Raw binary message body (e.g., images, serialized objects)",
+          "message": "Сире бінарне тіло повідомлення (наприклад, зображення, серіалізовані об'єкти)"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ.display_name": {
+          "source": "Binary",
+          "message": "Бінарний"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ.short_desc": {
+          "source": "Raw binary data",
+          "message": "Сирі бінарні дані"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL2pzb24.desc": {
+          "source": "Message body encoded as JSON (JavaScript Object Notation)",
+          "message": "Тіло повідомлення, закодоване як JSON (JavaScript Object Notation)"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL2pzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL2pzb24.short_desc": {
+          "source": "JSON-encoded data",
+          "message": "Дані, закодовані в JSON"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3htbA.desc": {
+          "source": "Message body encoded as XML",
+          "message": "Тіло повідомлення, закодоване як XML"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3htbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3htbA.short_desc": {
+          "source": "XML-encoded data",
+          "message": "Дані, закодовані в XML"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3lhbWw.desc": {
+          "source": "Message body encoded as YAML",
+          "message": "Тіло повідомлення, закодоване як YAML"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3lhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3lhbWw.short_desc": {
+          "source": "YAML-encoded data",
+          "message": "Дані, закодовані в YAML"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text message body",
+          "message": "Тіло повідомлення у форматі простого тексту"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "UTF-8 plain text",
+          "message": "Простий текст UTF-8"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME content type describing the format of the message body.\n\nSetting this helps consumers know how to interpret the message. Common values include `text/plain` for simple text, `application/json` for structured data, and `application/octet-stream` for binary payloads.",
+          "message": "Тип вмісту MIME, який описує формат тіла повідомлення.\n\nВстановлення цього значення допомагає отримувачам зрозуміти, як інтерпретувати повідомлення. Поширені значення включають `text/plain` для простого тексту, `application/json` для структурованих даних і `application/octet-stream` для бінарного корисного навантаження."
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Тип вмісту"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "MIME type of the message body",
+          "message": "Тип MIME тіла повідомлення"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29ycmVsYXRpb25faWQ.desc": {
+          "source": "An identifier that links this message to a related message, typically used in request-reply patterns.\n\nSet this to the `message_id` of the original request when sending a reply, so the requester can match the response.",
+          "message": "Ідентифікатор, який пов'язує це повідомлення з відповідним повідомленням, зазвичай використовується в шаблонах \"запит-відповідь\".\n\nВстановіть це значення рівним `message_id` початкового запиту під час надсилання відповіді, щоб той, хто зробив запит, міг зіставити відповідь."
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29ycmVsYXRpb25faWQ.display_name": {
+          "source": "Correlation ID",
+          "message": "Ідентифікатор кореляції"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Y29ycmVsYXRpb25faWQ.short_desc": {
+          "source": "Links related messages together",
+          "message": "Пов'язує пов'язані повідомлення"
+        },
+        "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.desc": {
+          "source": "The AMQP address (queue or topic name) where the message will be published.\n\nMessages sent to a **queue** are delivered to a single consumer (point-to-point). Messages sent to a **topic** are delivered to all subscribers (publish-subscribe).",
+          "message": "Адреса AMQP (назва черги або теми), за якою буде опубліковано повідомлення.\n\nПовідомлення, надіслані в **чергу**, доставляються одному отримувачу (point-to-point). Повідомлення, надіслані в **тему**, доставляються всім передплатникам (publish-subscribe)."
+        },
+        "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.display_name": {
+          "source": "AMQP Address",
+          "message": "Адреса AMQP"
+        },
+        "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.short_desc": {
+          "source": "The queue or topic to send to",
+          "message": "Черга або тема для надсилання"
+        },
+        "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.desc": {
+          "source": "A hash of custom key-value properties attached to the message.\n\nUse application properties to add business-specific metadata such as customer IDs, priority levels, or processing flags. These properties can be used by consumers for filtering and routing.",
+          "message": "Хеш настроюваних властивостей \"ключ-значення\", прикріплених до повідомлення.\n\nВикористовуйте властивості програми для додавання специфічних для бізнесу метаданих, таких як ID клієнтів, рівні пріоритету або прапорці обробки. Ці властивості можуть використовуватися отримувачами для фільтрації та маршрутизації."
+        },
+        "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.display_name": {
+          "source": "Application Properties",
+          "message": "Властивості програми"
+        },
+        "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.short_desc": {
+          "source": "Custom key-value metadata",
+          "message": "Настроювані метадані \"ключ-значення\""
+        },
+        "app.QU1RUA.action.c2VuZA.option.Ym9keQ.desc": {
+          "source": "The message body to send to the AMQP address.\n\nCan be any serializable type:\n- **String**: plain text or encoded data (JSON, XML, YAML)\n- **Hash**: structured data (automatically encoded as AMQP map)\n- **List**: ordered collection\n- **Binary**: raw binary data\n- **Integer, float, boolean, date**: scalar values",
+          "message": "Тіло повідомлення для надсилання на адресу AMQP.\n\nМоже бути будь-якого типу, що серіалізується:\n- **Рядок**: простий текст або закодовані дані (JSON, XML, YAML)\n- **Хеш**: структуровані дані (автоматично кодуються як карта AMQP)\n- **Список**: впорядкована колекція\n- **Бінарні дані**: сирі бінарні дані\n- **Ціле число, число з плаваючою комою, логічне значення, дата**: скалярні значення"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Тіло повідомлення"
+        },
+        "app.QU1RUA.action.c2VuZA.option.Ym9keQ.short_desc": {
+          "source": "The message payload to send",
+          "message": "Корисне навантаження повідомлення для надсилання"
+        },
+        "app.QU1RUA.action.c2VuZA.option.bWVzc2FnZV9pZA.desc": {
+          "source": "A unique identifier for this message, used for deduplication and tracking.\n\nIf not provided, the broker may assign one automatically. Use a UUID or application-specific format for reliable tracking.",
+          "message": "Унікальний ідентифікатор для цього повідомлення, який використовується для дедуплікації та відстеження.\n\nЯкщо не вказано, брокер може призначити його автоматично. Використовуйте UUID або специфічний для програми формат для надійного відстеження."
+        },
+        "app.QU1RUA.action.c2VuZA.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "Ідентифікатор повідомлення"
+        },
+        "app.QU1RUA.action.c2VuZA.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "Unique identifier for the message",
+          "message": "Унікальний ідентифікатор повідомлення"
+        },
+        "app.QU1RUA.action.c2VuZA.option.c3ViamVjdA.desc": {
+          "source": "The subject of the message, which can be used for content-based routing or categorization.\n\nSome brokers use this as a routing key to direct messages to specific queues or consumers.",
+          "message": "Тема повідомлення, яка може використовуватися для маршрутизації на основі вмісту або категоризації.\n\nДеякі брокери використовують це як ключ маршрутизації для направлення повідомлень у конкретні черги або отримувачам."
+        },
+        "app.QU1RUA.action.c2VuZA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Тема"
+        },
+        "app.QU1RUA.action.c2VuZA.option.c3ViamVjdA.short_desc": {
+          "source": "Message subject or routing key",
+          "message": "Тема повідомлення або ключ маршрутизації"
+        },
+        "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.desc": {
+          "source": "The AMQP address where replies to this message should be sent.\n\nUsed in request-reply patterns to tell the receiver where to send the response.",
+          "message": "Адреса AMQP, куди слід надсилати відповіді на це повідомлення.\n\nВикористовується в шаблонах \"запит-відповідь\", щоб повідомити отримувача, куди надсилати відповідь."
+        },
+        "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.display_name": {
+          "source": "Reply-To Address",
+          "message": "Адреса для відповіді"
+        },
+        "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.short_desc": {
+          "source": "Address for reply messages",
+          "message": "Адреса для повідомлень-відповідей"
+        },
+        "app.QU1RUA.action.c2VuZA.short_desc": {
+          "source": "Publish a message to an AMQP queue or topic",
+          "message": "Опублікувати повідомлення в черзі або темі AMQP"
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.desc": {
+          "source": "Observes incoming messages on the specified AMQP address and fires an event for each message received.\n\nEach event includes the message `body`, `content_type`, `message_id`, `correlation_id`, `reply_to`, `subject`, and any custom `application_properties` set by the sender.\n\n**Use this to**:\n- Process orders as they arrive on a queue\n- React to notifications from a topic\n- Trigger workflows when integration messages are received",
+          "message": "Відстежує вхідні повідомлення на вказаній адресі AMQP і викликає подію для кожного отриманого повідомлення.\n\nКожна подія включає повідомлення `body`, `content_type`, `message_id`, `correlation_id`, `reply_to`, `subject` та будь-які настроювані `application_properties`, встановлені відправником.\n\n**Використовуйте це для**:\n- Обробки замовлень у міру їх надходження в чергу\n- Реагування на сповіщення з теми\n- Запуску робочих процесів при отриманні інтеграційних повідомлень"
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.display_name": {
+          "source": "Receive Messages",
+          "message": "Отримувати повідомлення"
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.desc": {
+          "source": "The AMQP address (queue or topic name) to listen on for incoming messages.\n\nMessages are delivered as events whenever they arrive on this address.",
+          "message": "Адреса AMQP (назва черги або теми) для прослуховування вхідних повідомлень.\n\nПовідомлення доставляються як події щоразу, коли вони надходять на цю адресу."
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.display_name": {
+          "source": "AMQP Address",
+          "message": "Адреса AMQP"
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.short_desc": {
+          "source": "The queue or topic to receive from",
+          "message": "Черга або тема для отримання"
+        },
+        "app.QU1RUA.action.cmVjZWl2ZQ.short_desc": {
+          "source": "Listen for incoming messages on an AMQP address",
+          "message": "Прослуховувати вхідні повідомлення на адресі AMQP"
+        },
+        "app.QU1RUA.desc": {
+          "source": "Connect to any [AMQP 1.0](https://www.amqp.org/) message broker (Apache ActiveMQ Artemis, RabbitMQ, Azure Service Bus, Amazon MQ, etc.) to integrate messaging into your workflows.\n\n**Use cases**:\n- **Order processing**: send order events to a queue for async processing\n- **Notifications**: publish alerts and notifications to topic subscribers\n- **System integration**: exchange data between microservices via message queues\n- **Event-driven workflows**: trigger actions when messages arrive\n\n**Supported operations**:\n- **Send**: publish messages to any address with full property support\n- **Receive**: observe incoming messages as real-time events\n- **Auto-discovery**: automatically discover broker addresses via the AMQP Management Protocol\n\nSupports both `amqp://` (plaintext) and `amqps://` (TLS-encrypted) connections.",
+          "message": "Підключення до будь-якого брокера повідомлень [AMQP 1.0](https://www.amqp.org/) (Apache ActiveMQ Artemis, RabbitMQ, Azure Service Bus, Amazon MQ тощо) для інтеграції обміну повідомленнями у ваші робочі процеси.\n\n**Сценарії використання**:\n- **Обробка замовлень**: надсилання подій замовлень у чергу для асинхронної обробки\n- **Сповіщення**: публікація попереджень та сповіщень передплатникам теми\n- **Інтеграція систем**: обмін даними між мікросервісами через черги повідомлень\n- **Робочі процеси на основі подій**: запуск дій при надходженні повідомлень\n\n**Підтримувані операції**:\n- **Send**: публікація повідомлень на будь-яку адресу з повною підтримкою властивостей\n- **Receive**: відстеження вхідних повідомлень як подій у реальному часі\n- **Auto-discovery**: автоматичне виявлення адрес брокера через протокол AMQP Management Protocol\n\nПідтримує як `amqp://` (звичайний текст), так і `amqps://` (зашифроване за допомогою TLS) підключення."
+        },
+        "app.QU1RUA.display_name": {
+          "source": "AMQP 1.0 Message Broker",
+          "message": "Брокер повідомлень AMQP 1.0"
+        },
+        "app.QU1RUA.short_desc": {
+          "source": "Send and receive messages via AMQP 1.0",
+          "message": "Надсилання та отримання повідомлень через AMQP 1.0"
+        }
+      }
+    }
+  }
+}
