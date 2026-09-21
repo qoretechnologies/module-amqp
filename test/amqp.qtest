@@ -27,6 +27,10 @@
 
 %modern
 
+# conversion to AMQP has to resolve these; see testIndirectReferences()
+%allow-weak-references
+%allow-opaque-references
+
 %requires QUnit
 %requires amqp
 
@@ -39,6 +43,7 @@ public class AmqpTest inherits QUnit::Test {
         addTestCase("message with binary body", \testMessageBinaryBody());
         addTestCase("message with hash body", \testMessageHashBody());
         addTestCase("message with list body", \testMessageListBody());
+        addTestCase("message body with indirect references", \testIndirectReferences());
         addTestCase("message with int body", \testMessageIntBody());
         addTestCase("message with float body", \testMessageFloatBody());
         addTestCase("message with bool body", \testMessageBoolBody());
@@ -131,6 +136,49 @@ public class AmqpTest inherits QUnit::Test {
         binary b = <deadbeef>;
         AmqpMessage msg(b);
         assertEq(b, msg.getBody());
+    }
+
+    #! A message body holding a weak or opaque reference must convert as its target
+    /** A container holds what was assigned to it, so a member assigned with ":=" or "@=" is stored
+        as the reference itself, and hashToProtonMap()/listToProton() pass that straight back to
+        qoreToProton().  Without QoreValue::resolveIndirect() the reference reaches the default
+        case and the whole message is rejected with "unsupported Qore type 'weak hash reference'
+        for AMQP conversion", even though its target converts fine.
+
+        Members are compared individually, as the other body tests here do: a round trip through
+        proton rebuilds the containers, so the bodies compare equal by value but not by the
+        absolute equality that assertEq() applies to whole containers.
+    */
+    testIndirectReferences() {
+        hash<auto> inner = {"a": 1, "b": "two"};
+        list<auto> ilist = ("one", 2, True);
+
+        hash<auto> weak = {};
+        weak{"h"} := inner;
+        weak{"l"} := ilist;
+        hash<auto> weak_body = (new AmqpMessage(weak)).getBody();
+        assertEq(1, weak_body.h.a, "a weak hash reference converts as its target");
+        assertEq("two", weak_body.h.b, "a weak hash reference keeps its target's values");
+        assertEq(("one", 2, True), weak_body.l, "a weak list reference converts as its target");
+
+        list<auto> weak_list = ();
+        weak_list[0] := inner;
+        list<auto> weak_list_body = (new AmqpMessage(weak_list)).getBody();
+        assertEq(1, weak_list_body.size(), "a list body with a weak reference keeps its size");
+        assertEq(1, weak_list_body[0].a, "a weak reference in a list converts as its target");
+
+        hash<auto> opaque = {};
+        opaque{"h"} @= inner;
+        opaque{"l"} @= ilist;
+        hash<auto> opaque_body = (new AmqpMessage(opaque)).getBody();
+        assertEq(1, opaque_body.h.a, "an opaque hash reference converts as its target");
+        assertEq(("one", 2, True), opaque_body.l, "an opaque list reference converts as its target");
+
+        list<auto> opaque_list = ();
+        opaque_list[0] @= ilist;
+        list<auto> opaque_list_body = (new AmqpMessage(opaque_list)).getBody();
+        assertEq(("one", 2, True), opaque_list_body[0],
+            "an opaque reference in a list converts as its target");
     }
 
     testMessageHashBody() {

@@ -107,7 +107,13 @@ QoreValue QoreAmqpHelper::protonToQore(const proton::value& val, ExceptionSink* 
     }
 }
 
-proton::value QoreAmqpHelper::qoreToProton(const QoreValue& val, ExceptionSink* xsink) {
+proton::value QoreAmqpHelper::qoreToProton(const QoreValue& val_arg, ExceptionSink* xsink) {
+    // A member assigned with the weak reference operator ":=" or the opaque reference operator
+    // "@=" is stored in its container as the reference itself, and hashToProtonMap() and
+    // listToProton() pass what the container holds straight back here.  Resolve it, or an
+    // ordinary convertible value is rejected as an unsupported type.  A weak reference whose
+    // target is gone resolves to NOTHING and is handled by the check below.
+    const QoreValue val = val_arg.resolveIndirect();
     if (val.isNullOrNothing()) {
         return proton::value();
     }
