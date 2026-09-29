@@ -1,0 +1,11 @@
+#!/bin/sh
+# Copyright (C) 2026 David Nichols
+# SPDX-License-Identifier: MIT
+set -eu
+for suite in test/*.qtest; do
+    timeout 600 /usr/bin/qore --enable-debug \
+        -l "$QORE_AMQP_TEST_MODULE_DIR/amqp-api-$(/usr/bin/qore --latest-module-api).qmod" \
+        -l "$QORE_AMQP_TEST_QMOD_DIR/AmqpUtil/AmqpUtil.qmod" \
+        -l "$QORE_AMQP_TEST_QMOD_DIR/AmqpDataProvider/AmqpDataProvider.qmod" \
+        "$suite" -v
+done

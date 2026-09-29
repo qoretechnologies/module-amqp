@@ -1,0 +1,13 @@
+qore-amqp-module (1.0.0~git20260928.1-0qore1~ubuntu26.04) resolute; urgency=medium
+
+  * Package native bindings, two compiled/source helpers, metadata,
+    resources/translations, API docs, test examples and debug symbols.
+  * Use the distribution Qpid Proton C++ library without downloads.
+  * Match the CMake minimum to COPY_FILE and declare AmqpUtil dependencies.
+  * Supply the documentation footer, correct tag paths and Qdx environment,
+    and convert API tables to Qore format.
+  * Apply custom TLS trust/client identity settings with sandbox file checks.
+  * Record explicit QUnit skips when no integration broker is configured.
+  * Add installed runtime/compiler tests and reproducible offline profiles.
+
+ -- David Nichols <david@qore.org>  Tue, 29 Sep 2026 03:29:10 -0000

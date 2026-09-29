@@ -1,0 +1,18 @@
+#!/bin/sh
+# Copyright (C) 2026 David Nichols
+# SPDX-License-Identifier: MIT
+set -eu
+export LC_ALL=C.UTF-8
+unset AMQP_TLS_TEST_URL AMQP_TLS_MTLS_URL AMQP_TLS_CA AMQP_TLS_WRONG_CA AMQP_TLS_CLIENT_CERT AMQP_TLS_CLIENT_KEY AMQP_TEST_URL QORE_MODULE_DIR QORE_MODULE_DIR_ONLY QORE_INCLUDE_DIR LD_LIBRARY_PATH LD_PRELOAD
+export QORE_MODULE_DIR=$(/usr/bin/qore --module-path)
+export QORE_MODULE_DIR_ONLY=1
+cp -a test "$AUTOPKGTEST_TMP/test"
+cp debian/tests/run-suites "$AUTOPKGTEST_TMP/"
+cd "$AUTOPKGTEST_TMP"
+module_dir=$(printf '%s\n' "$QORE_MODULE_DIR" | tr : '\n' | while IFS= read -r path; do
+    if [ -f "$path/AmqpUtil/AmqpUtil.qmod" ]; then printf '%s\n' "$path"; break; fi
+done)
+test -n "$module_dir"
+export QORE_AMQP_TEST_MODULE_DIR="$module_dir"
+export QORE_AMQP_TEST_QMOD_DIR="$module_dir"
+exec ./run-suites

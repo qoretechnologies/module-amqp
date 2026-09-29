@@ -1,0 +1,37 @@
+Qore AMQP module packages
+========================
+
+This is a development snapshot for qore-testing, not a final release.
+The runtime contains native AMQP 1.0 bindings, two source/AOT helper modules,
+compiler metadata, provider resources and all translation catalogs. The doc
+package contains three API references and test examples. No broker is installed
+or started by the runtime package.
+
+Build with dpkg-buildpackage -us -uc and the matching Qore 3 SDK. Distribution
+libqpid-proton-cpp12-dev supplies the native client. Full, arch-only, indep-only,
+nocheck and nodoc profiles work offline; cross builds require a separate host
+SDK and are rejected. Fixed qcc partitions and explicit sibling dependencies
+support reproducibility, and Qore AOT metadata trailers are preserved.
+
+Build and default installed tests run message conversion and provider unit
+checks without an external broker. Four explicit QUnit skips identify missing
+broker-dependent suites/sections and TLS fixtures. Broker/TLS fixture variables
+are cleared during these checks to avoid contacting an external system. Fresh qcc
+tests compile and execute installed message conversion and provider registration.
+
+Integration qualification must additionally run all test/*.qtest against a
+private AMQP 1.0 broker, setting AMQP_TEST_URL explicitly. Apache Artemis is
+used in upstream CI. Ubuntu's ActiveMQ Classic package lacks its AMQP transport,
+and Artemis is not a distribution build dependency; downloaded broker binaries
+must remain external test fixtures, never source/binary package payloads.
+Use a checksum-verified broker release with disposable credentials and data.
+Broker management tests permit an unsupported/empty response; they do not
+establish complete management feature support. TLS fixtures additionally
+exercise private CA trust, hostname verification and
+client-certificate authentication. Other TLS/SASL deployment combinations,
+cluster failover and other brokers require separate qualification.
+
+Before general publication, qualify other Debian/Ubuntu releases and
+architectures, freeze the Qore ABI and test relevant upgrades. No previous
+module package is available for upgrade tests. PPA publication requires the
+matching published SDK, source signing and upload.

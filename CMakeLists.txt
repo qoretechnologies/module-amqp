@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5.0)
+cmake_minimum_required(VERSION 3.21)
 
 project(qore-amqp-module)
 
@@ -146,7 +146,7 @@ qore_dist(${PROJECT_VERSION})
 
 qore_user_modules("${QMOD}")
 qore_external_user_module("qlib/AmqpUtil" "")
-qore_external_user_module("qlib/AmqpDataProvider" "")
+qore_external_user_module("qlib/AmqpDataProvider" "AmqpUtil")
 
 # Reconcile the installed i18n catalog root against the fragments these modules
 # currently own.  Installing catalogs is otherwise additive: a fragment installed by
@@ -189,8 +189,8 @@ if (DOXYGEN_FOUND)
         "\n# Suppress warnings for initial pass (no user module TAGFILES available)\nWARN_IF_DOC_ERROR = NO\n")
 
     # Create final-pass Doxyfile from the binary module's Doxyfile with user module tag files
-    set(_tagfiles "${CMAKE_BINARY_DIR}/AmqpUtil.tag=../AmqpUtil/html "
-        "${CMAKE_BINARY_DIR}/AmqpDataProvider.tag=../AmqpDataProvider/html")
+    string(CONCAT _tagfiles "${CMAKE_BINARY_DIR}/AmqpUtil.tag=../../AmqpUtil/html "
+        "${CMAKE_BINARY_DIR}/AmqpDataProvider.tag=../../AmqpDataProvider/html")
     set(_doc_deps docs-AmqpUtil docs-AmqpDataProvider)
 
     file(COPY_FILE ${CMAKE_BINARY_DIR}/Doxyfile ${CMAKE_BINARY_DIR}/Doxyfile.final)
@@ -201,7 +201,7 @@ if (DOXYGEN_FOUND)
 
     add_custom_target(docs-module-final
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/Doxyfile.final
-        COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post
+        COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post
             ${CMAKE_BINARY_DIR}/docs/${module_name}/html
             ${CMAKE_BINARY_DIR}/docs/${module_name}/html/search
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}

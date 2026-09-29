@@ -264,12 +264,16 @@ void QoreAmqpConnection::Handler::on_container_start(proton::container& c) {
         co.reconnect(ro);
     }
 
-    // SSL
-    if (conn_.url_.substr(0, 5) == "amqps") {
-        // SSL is required
-        if (!conn_.ssl_ca_cert_.empty() || !conn_.ssl_client_cert_.empty()) {
-            // Create SSL domain with certificate files
-            // Note: proton::ssl::client_context handles SSL setup
+    // Apply the configured trust and client identity before the transport is opened.
+    if (conn_.url_.compare(0, 8, "amqps://") == 0) {
+        auto verify = conn_.ssl_verify_ ? proton::ssl::VERIFY_PEER_NAME : proton::ssl::ANONYMOUS_PEER;
+        if (!conn_.ssl_client_cert_.empty()) {
+            proton::ssl_certificate identity(conn_.ssl_client_cert_, conn_.ssl_client_key_);
+            co.ssl_client_options(proton::ssl_client_options(identity, conn_.ssl_ca_cert_, verify));
+        } else if (!conn_.ssl_ca_cert_.empty()) {
+            co.ssl_client_options(proton::ssl_client_options(conn_.ssl_ca_cert_, verify));
+        } else {
+            co.ssl_client_options(proton::ssl_client_options(verify));
         }
     }
 
@@ -783,6 +787,29 @@ void QoreAmqpConnection::connect(ExceptionSink* xsink) {
     // Check network security access
     if (!checkNetworkAccess(xsink)) {
         return;
+    }
+
+    // Check certificate files in the caller's sandbox before the background thread reads them.
+    if (url_.compare(0, 8, "amqps://") == 0) {
+        if (ssl_client_cert_.empty() != ssl_client_key_.empty()) {
+            xsink->raiseException("AMQP-CONNECTION-ERROR",
+                "TLS client_cert and client_key must be supplied together");
+            return;
+        }
+        if ((!ssl_ca_cert_.empty() || !ssl_client_cert_.empty())
+                && getProgram() && (getProgram()->getParseOptions() & PO_NO_FILESYSTEM)) {
+            xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
+                "reading AMQP TLS certificate files is not allowed when PO_NO_FILESYSTEM is set");
+            return;
+        }
+        QoreSandboxManagerHelper smh;
+        if (smh) {
+            for (const auto* path : {&ssl_ca_cert_, &ssl_client_cert_, &ssl_client_key_}) {
+                if (!path->empty() && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
+                    return;
+                }
+            }
+        }
     }
 
     // Create and start the container in a background thread

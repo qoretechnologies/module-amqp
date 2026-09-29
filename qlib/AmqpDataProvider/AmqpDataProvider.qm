@@ -195,14 +195,13 @@ module AmqpDataProvider {
 
     @subsection amqpdataprovider_factory_options Factory Options
 
-    | Option | Type | Description |
-    |--------|------|-------------|
-    | \c url | string | Broker URL (\c amqp://host:port or \c amqps://host:port) |
-    | \c addresses | string | Comma-separated list of AMQP addresses |
-    | \c use_management | bool | Auto-discover addresses via AMQP Management Protocol (default: \c False) |
-    | \c username | string | SASL username |
-    | \c password | string | SASL password (sensitive) |
-    | \c timeout_ms | int | Default timeout in milliseconds (default: \c 30000) |
+    |!Option|!Type|!Description
+    |\c url|string|Broker URL (\c amqp://host:port or \c amqps://host:port)
+    |\c addresses|string|Comma-separated list of AMQP addresses
+    |\c use_management|bool|Auto-discover addresses via AMQP Management Protocol (default: \c False)
+    |\c username|string|SASL username
+    |\c password|string|SASL password (sensitive)
+    |\c timeout_ms|int|Default timeout in milliseconds (default: \c 30000)
 
     @section amqpdataprovider_examples AmqpDataProvider Examples
 

@@ -1,0 +1,7 @@
+usr/lib/*/qore-modules/amqp-api-*.qmod
+usr/lib/*/qore-modules/AmqpUtil/
+usr/share/qore-modules/AmqpUtil/
+usr/lib/*/qore-modules/AmqpDataProvider/
+usr/share/qore-modules/AmqpDataProvider/
+usr/share/qore/metadata/amqp/*.meta.json
+usr/share/qore/i18n/

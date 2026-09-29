@@ -37,13 +37,13 @@ hashdecl Qore::Amqp::AmqpSslOptions {
     //! Path to PEM-encoded CA certificate file for server verification
     *string ca_cert;
 
-    //! Path to PEM-encoded client certificate file for mutual TLS
+    //! Path to PEM-encoded client certificate file for mutual TLS; requires client_key
     *string client_cert;
 
-    //! Path to PEM-encoded client private key file for mutual TLS
+    //! Path to PEM-encoded client private key file for mutual TLS; requires client_cert
     *string client_key;
 
-    //! If True, verify the server's certificate (default: True)
+    //! If True, verify the server's certificate and hostname (default: True); False disables both checks
     *bool verify;
 }
 

@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires QUnit
+%requires amqp
+%exec-class AmqpTlsTest
+
+#! TLS integration tests against a private broker with generated test identities
+/** The fixture supplies AMQP_TLS_TEST_URL, AMQP_TLS_MTLS_URL, AMQP_TLS_CA,
+    AMQP_TLS_WRONG_CA, AMQP_TLS_CLIENT_CERT and AMQP_TLS_CLIENT_KEY.
+    Run with system trust excluding the fixture CA to verify explicit ca_cert handling.
+*/
+class AmqpTlsTest inherits QUnit::Test {
+    constructor() : Test("AmqpTlsTest", "1.0") {
+        addTestCase("TLS files respect sandbox", \testSandbox());
+        addTestCase("TLS files respect PO_NO_FILESYSTEM", \testNoFilesystem());
+        if (!ENV.AMQP_TLS_TEST_URL || !ENV.AMQP_TLS_MTLS_URL || !ENV.AMQP_TLS_CA
+                || !ENV.AMQP_TLS_WRONG_CA || !ENV.AMQP_TLS_CLIENT_CERT || !ENV.AMQP_TLS_CLIENT_KEY) {
+            addTestCase("TLS fixture dependency", sub() { testSkip("AMQP_TLS_* fixture not configured"); });
+        } else {
+            addTestCase("custom CA trust", \testCustomCa());
+            addTestCase("untrusted CA rejected", \testWrongCa());
+            addTestCase("hostname verification", \testWrongHostname());
+            addTestCase("explicit verification opt-out", \testNoVerify());
+            addTestCase("incomplete client identity rejected", \testIncompleteIdentity());
+            addTestCase("mutual TLS client identity", \testMutualTls());
+            addTestCase("mutual TLS without identity rejected", \testMissingIdentity());
+        }
+        set_return_value(main());
+    }
+
+    private Program makeRestrictedProgram(int options = 0) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS | options);
+        p.loadModule("amqp");
+        p.parse("%modern
+sub connectWithFiles(bool client) {
+    hash<AmqpSslOptions> ssl = client
+        ? <AmqpSslOptions>{\"client_cert\": \"/qore-tls-test/client.pem\", \"client_key\": \"/qore-tls-test/client.key\"}
+        : <AmqpSslOptions>{\"ca_cert\": \"/qore-tls-test/ca.pem\"};
+    AmqpConnection conn(<AmqpConnectionOptions>{\"url\": \"amqps://127.0.0.1:1\", \"ssl\": ssl});
+    conn.connect();
+}", "amqp-tls-sandbox");
+        return p;
+    }
+    testSandbox() {
+        Program p = makeRestrictedProgram();
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sm.addNetworkAllowedIPRange("127.0.0.1/32");
+        p.setSandboxManager(sm);
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub() { p.callFunction("connectWithFiles", False); });
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub() { p.callFunction("connectWithFiles", True); });
+    }
+    testNoFilesystem() {
+        Program p = makeRestrictedProgram(PO_NO_FILESYSTEM);
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub() { p.callFunction("connectWithFiles", False); });
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub() { p.callFunction("connectWithFiles", True); });
+    }
+
+    private connectWith(hash<AmqpSslOptions> ssl, *string url, *string virtual_host) {
+        AmqpConnection conn(<AmqpConnectionOptions>{"url": url ?? ENV.AMQP_TLS_TEST_URL, "ssl": ssl, "virtual_host": virtual_host});
+        conn.connect();
+        on_exit conn.close();
+        assertTrue(conn.isConnected());
+        # Link creation makes any post-handshake transport failure observable.
+        conn.createSender("tls-qualification");
+    }
+    testCustomCa() {
+        connectWith(<AmqpSslOptions>{"ca_cert": ENV.AMQP_TLS_CA});
+    }
+    testWrongCa() {
+        assertThrows("AMQP-CONNECTION-ERROR", sub() { connectWith(<AmqpSslOptions>{"ca_cert": ENV.AMQP_TLS_WRONG_CA}); });
+    }
+    testWrongHostname() {
+        assertThrows("AMQP-CONNECTION-ERROR", sub() {
+            connectWith(<AmqpSslOptions>{"ca_cert": ENV.AMQP_TLS_CA}, NOTHING, "invalid.example");
+        });
+    }
+    testNoVerify() {
+        connectWith(<AmqpSslOptions>{"ca_cert": ENV.AMQP_TLS_WRONG_CA, "verify": False}, NOTHING, "invalid.example");
+    }
+    testIncompleteIdentity() {
+        assertThrows("AMQP-CONNECTION-ERROR", sub() {
+            connectWith(<AmqpSslOptions>{"ca_cert": ENV.AMQP_TLS_CA, "client_cert": ENV.AMQP_TLS_CLIENT_CERT});
+        });
+        assertThrows("AMQP-CONNECTION-ERROR", sub() {
+            connectWith(<AmqpSslOptions>{"ca_cert": ENV.AMQP_TLS_CA, "client_key": ENV.AMQP_TLS_CLIENT_KEY});
+        });
+    }
+    testMutualTls() {
+        connectWith(<AmqpSslOptions>{"ca_cert": ENV.AMQP_TLS_CA, "client_cert": ENV.AMQP_TLS_CLIENT_CERT,
+            "client_key": ENV.AMQP_TLS_CLIENT_KEY}, ENV.AMQP_TLS_MTLS_URL);
+    }
+    testMissingIdentity() {
+        assertThrows("AMQP-CONNECTION-ERROR", sub() {
+            connectWith(<AmqpSslOptions>{"ca_cert": ENV.AMQP_TLS_CA}, ENV.AMQP_TLS_MTLS_URL);
+        });
+    }
+}

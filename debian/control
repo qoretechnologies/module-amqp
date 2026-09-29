@@ -1,0 +1,41 @@
+Source: qore-amqp-module
+Section: interpreters
+Priority: optional
+Maintainer: David Nichols <david@qore.org>
+Build-Depends: debhelper-compat (= 13),
+               cmake (>= 3.21),
+               libqpid-proton-cpp12-dev,
+               pkgconf,
+               libqore-dev (>= 3.0.0~),
+               qore (>= 3.0.0~),
+               qore-misc-tools (>= 3.0.0~) <!nocheck>,
+               python3
+Build-Depends-Indep: doxygen <!nodoc>
+Standards-Version: 4.7.4
+Rules-Requires-Root: no
+Homepage: https://qore.org
+Vcs-Git: https://github.com/qoretechnologies/module-amqp.git
+Vcs-Browser: https://github.com/qoretechnologies/module-amqp
+
+Package: qore-amqp-module
+Architecture: any
+Depends: ${qore:Depends},
+         ${shlibs:Depends},
+         ${misc:Depends}
+Suggests: qore-amqp-module-doc
+Description: AMQP 1.0 messaging and data providers for Qore
+ This package provides native Apache Qpid Proton bindings and source/compiled
+ helper modules for messaging, transactions and data provider integration.
+ Compiler metadata, provider resources and translations are included.
+ An AMQP 1.0 broker is needed for network messaging.
+
+Package: qore-amqp-module-doc
+Section: doc
+Architecture: all
+Multi-Arch: foreign
+Build-Profiles: <!nodoc>
+Depends: ${misc:Depends}
+Suggests: qore-amqp-module
+Description: documentation and examples for Qore's AMQP modules
+ This package contains three HTML API references and unit/integration test
+ examples for the AMQP bindings, helper and data provider modules.

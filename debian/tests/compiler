@@ -1,0 +1,21 @@
+#!/bin/sh
+# Copyright (C) 2026 David Nichols
+# SPDX-License-Identifier: MIT
+set -eu
+unset AMQP_TEST_URL QORE_MODULE_DIR QORE_MODULE_DIR_ONLY QORE_INCLUDE_DIR LD_LIBRARY_PATH LD_PRELOAD
+cd "$AUTOPKGTEST_TMP"
+cat > amqp-smoke.q <<'EOF'
+%modern
+%requires amqp
+%requires AmqpUtil
+%requires AmqpDataProvider
+%requires DataProvider
+AmqpMessage message(body: {"package": "installed compiler", "count": 42});
+hash<auto> body = message.getBody();
+if (body.package != "installed compiler" || body.count != 42
+        || DataProvider::getFactory("amqp").getInfo().name != "amqp") {
+    throw "PACKAGE-TEST-ERROR", "Installed AMQP conversion or provider registration failed";
+}
+EOF
+/usr/bin/qcc -o amqp-smoke amqp-smoke.q
+timeout 60 ./amqp-smoke

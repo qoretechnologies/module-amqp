@@ -26,6 +26,7 @@
 */
 
 %modern
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 
 # conversion to AMQP has to resolve these; see testIndirectReferences()
 %allow-weak-references

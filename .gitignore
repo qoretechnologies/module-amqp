@@ -7,3 +7,15 @@ build*
 __pycache__
 .DS_Store
 vgcore.*
+
+# Debian package build products
+/obj-*/
+/debian/.debhelper/
+/debian/debhelper-build-stamp
+/debian/files
+/debian/*.substvars
+/debian/*.debhelper
+/debian/qore-amqp-module/
+/debian/qore-amqp-module-doc/
+/debian/tmp/
+**/__pycache__/

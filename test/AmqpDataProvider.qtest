@@ -26,6 +26,7 @@
 */
 
 %modern
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 
 %requires QUnit
 %requires amqp
@@ -65,7 +66,7 @@ public class AmqpDataProviderTest inherits QUnit::Test {
             addTestCase("provider with management", \testProviderWithManagement());
             addTestCase("missing url throws", \testMissingUrlThrows());
         } else {
-            printf("AMQP_TEST_URL not set, skipping integration tests\n");
+            addTestCase("broker dependency", sub() { testSkip("AMQP_TEST_URL not set"); });
         }
 
         set_return_value(main());

@@ -46,19 +46,18 @@
 
     @section amqptypemap Type Mapping
 
-    | AMQP Type | %Qore Type |
-    |-----------|-----------|
-    | string | string |
-    | binary | binary |
-    | boolean | bool |
-    | byte/short/int/long | int |
-    | float/double | float |
-    | timestamp | date |
-    | uuid | string (formatted) |
-    | symbol | string |
-    | map | hash |
-    | list | list |
-    | null | NOTHING |
+    |!AMQP Type|!%Qore Type
+    |string|string
+    |binary|binary
+    |boolean|bool
+    |byte/short/int/long|int
+    |float/double|float
+    |timestamp|date
+    |uuid|string (formatted)
+    |symbol|string
+    |map|hash
+    |list|list
+    |null|NOTHING
 
     @section amqpexamples Usage Examples
 
@@ -661,38 +660,39 @@ conn.connect();  # authenticates as myuser
 
     @section amqp_connection_options Connection Options Reference
 
-    | Option | Type | Default | Description |
-    |--------|------|---------|-------------|
-    | \c url | string | (required) | Broker URL (\c amqp:// or \c amqps://) |
-    | \c ssl | @ref AmqpSslOptions | — | TLS/SSL configuration |
-    | \c sasl | @ref AmqpSaslOptions | — | SASL authentication |
-    | \c heartbeat | int | 0 | Heartbeat interval in seconds |
-    | \c idle_timeout | int | 0 | Idle timeout in milliseconds |
-    | \c max_frame_size | int | 0 | Maximum frame size in bytes |
-    | \c container_id | string | auto | Container identifier |
-    | \c virtual_host | string | — | Virtual host name |
-    | \c reconnect | bool | False | Enable automatic reconnection |
-    | \c max_reconnect_attempts | int | 0 | Max reconnect attempts (0 = unlimited) |
-    | \c reconnect_delay_ms | int | 1000 | Delay between reconnect attempts |
+    |!Option|!Type|!Default|!Description
+    |\c url|string|(required)|Broker URL (\c amqp:// or \c amqps://)
+    |\c ssl|@ref AmqpSslOptions|—|TLS/SSL configuration
+    |\c sasl|@ref AmqpSaslOptions|—|SASL authentication
+    |\c heartbeat|int|0|Heartbeat interval in seconds
+    |\c idle_timeout|int|0|Idle timeout in milliseconds
+    |\c max_frame_size|int|0|Maximum frame size in bytes
+    |\c container_id|string|auto|Container identifier
+    |\c virtual_host|string|—|Virtual host name
+    |\c reconnect|bool|False|Enable automatic reconnection
+    |\c max_reconnect_attempts|int|0|Max reconnect attempts (0 = unlimited)
+    |\c reconnect_delay_ms|int|1000|Delay between reconnect attempts
 
     @section amqp_exceptions Exception Reference
 
-    | Exception | Raised By | Description |
-    |-----------|-----------|-------------|
-    | \c AMQP-CONNECTION-ERROR | connect(), send(), receive(), etc. | Connection not open or connection failure |
-    | \c AMQP-SEND-ERROR | send() | Message send failure or broker rejection |
-    | \c AMQP-RECEIVE-ERROR | receive() | Receiver not found or decode failure |
-    | \c AMQP-DELIVERY-ERROR | accept(), reject(), release(), modify() | Delivery tag not found |
-    | \c AMQP-TRANSACTION-ERROR | begin/commit/rollbackTransaction() | Invalid transaction state |
-    | \c AMQP-SENDER-ERROR | createSender() | Sender link creation failure |
-    | \c AMQP-RECEIVER-ERROR | createReceiver(), createDurableReceiver() | Receiver link creation failure |
-    | \c AMQP-SUBSCRIPTION-ERROR | unsubscribeDurable() | Subscription removal failure |
-    | \c AMQP-DECODE-ERROR | receive() | Message body/map/list decode failure |
-    | \c AMQP-ENCODE-ERROR | send() | Message body/map/list encode failure |
-    | \c AMQP-REQUEST-REPLY-TIMEOUT | AmqpRequestReply::request() | No correlated response within timeout |
-    | \c AMQP-CONVERTER-ERROR | AmqpMessageConverter | Required serialization module not available |
+    |!Exception|!Raised By|!Description
+    |\c AMQP-CONNECTION-ERROR|connect(), send(), receive(), etc.|Connection not open or connection failure
+    |\c AMQP-SEND-ERROR|send()|Message send failure or broker rejection
+    |\c AMQP-RECEIVE-ERROR|receive()|Receiver not found or decode failure
+    |\c AMQP-DELIVERY-ERROR|accept(), reject(), release(), modify()|Delivery tag not found
+    |\c AMQP-TRANSACTION-ERROR|begin/commit/rollbackTransaction()|Invalid transaction state
+    |\c AMQP-SENDER-ERROR|createSender()|Sender link creation failure
+    |\c AMQP-RECEIVER-ERROR|createReceiver(), createDurableReceiver()|Receiver link creation failure
+    |\c AMQP-SUBSCRIPTION-ERROR|unsubscribeDurable()|Subscription removal failure
+    |\c AMQP-DECODE-ERROR|receive()|Message body/map/list decode failure
+    |\c AMQP-ENCODE-ERROR|send()|Message body/map/list encode failure
+    |\c AMQP-REQUEST-REPLY-TIMEOUT|AmqpRequestReply::request()|No correlated response within timeout
+    |\c AMQP-CONVERTER-ERROR|AmqpMessageConverter|Required serialization module not available
 
     @section amqprelnotes Release Notes
+
+    - fixed custom TLS CA trust, client certificate/key handling and verification policy;
+      certificate files are checked against the caller's sandbox before use
 
     @subsection amqp_v1_0 amqp Module Version 1.0
     - initial release

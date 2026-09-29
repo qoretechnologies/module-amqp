@@ -1,0 +1,9 @@
+Document: qore-amqp-module
+Title: Qore AMQP Module Reference
+Author: Qore Technologies, s.r.o.
+Abstract: API reference for AMQP messaging and data provider integration.
+Section: Programming
+
+Format: HTML
+Index: /usr/share/doc/qore-amqp-module-doc/docs/amqp/html/index.html
+Files: /usr/share/doc/qore-amqp-module-doc/docs/*/html/*.html

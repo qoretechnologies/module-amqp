@@ -1,0 +1,7 @@
+Tests: runtime
+Depends: qore-amqp-module
+Restrictions: allow-stderr
+
+Tests: compiler
+Depends: qore-amqp-module, libqore-dev
+Restrictions: allow-stderr
