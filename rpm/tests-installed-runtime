@@ -1,0 +1,19 @@
+#!/bin/sh
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+set -eu
+export LC_ALL=C.UTF-8
+unset QORE_MODULE_DIR QORE_MODULE_DIR_ONLY QORE_INCLUDE_DIR LD_LIBRARY_PATH LD_PRELOAD
+unset AMQP_TEST_URL AMQP_TLS_TEST_URL AMQP_TLS_MTLS_URL AMQP_TLS_CA AMQP_TLS_WRONG_CA AMQP_TLS_CLIENT_CERT AMQP_TLS_CLIENT_KEY
+mkdir -p "${QORE_RPM_TEST_TMP:?set QORE_RPM_TEST_TMP}/test"
+cp test/*.qtest "${QORE_RPM_TEST_TMP:?set QORE_RPM_TEST_TMP}/test/"
+cd "${QORE_RPM_TEST_TMP:?set QORE_RPM_TEST_TMP}"
+module_dir=$(/usr/bin/qore --module-path | tr : '\n' | while IFS= read -r path; do
+    if [ -f "$path/AmqpUtil/AmqpUtil.qmod" ]; then printf '%s\n' "$path"; break; fi
+done)
+test -n "$module_dir"
+for suite in test/*.qtest; do
+    timeout 600 /usr/bin/qore -b --enable-debug \
+        -l "$module_dir/AmqpUtil/AmqpUtil.qmod" \
+        -l "$module_dir/AmqpDataProvider/AmqpDataProvider.qmod" "$suite" -v
+done
