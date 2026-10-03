@@ -1,0 +1,20 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page amqp_exceptionsguide Exception Reference
+
+    @tableofcontents
+
+    |!Exception|!Raised By|!Description
+    |\c AMQP-CONNECTION-ERROR|connect(), send(), receive(), etc.|Connection not open or connection failure
+    |\c AMQP-SEND-ERROR|send()|Message send failure or broker rejection
+    |\c AMQP-RECEIVE-ERROR|receive()|Receiver not found or decode failure
+    |\c AMQP-DELIVERY-ERROR|accept(), reject(), release(), modify()|Delivery tag not found
+    |\c AMQP-TRANSACTION-ERROR|begin/commit/rollbackTransaction()|Invalid transaction state
+    |\c AMQP-SENDER-ERROR|createSender()|Sender link creation failure
+    |\c AMQP-RECEIVER-ERROR|createReceiver(), createDurableReceiver()|Receiver link creation failure
+    |\c AMQP-SUBSCRIPTION-ERROR|unsubscribeDurable()|Subscription removal failure
+    |\c AMQP-DECODE-ERROR|receive()|Message body/map/list decode failure
+    |\c AMQP-ENCODE-ERROR|send()|Message body/map/list encode failure
+    |\c AMQP-REQUEST-REPLY-TIMEOUT|AmqpRequestReply::request()|No correlated response within timeout
+    |\c AMQP-CONVERTER-ERROR|AmqpMessageConverter|Required serialization module not available
+*/

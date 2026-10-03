@@ -108,6 +108,13 @@ set(QMOD
 
 set(QORE_DOX_TMPL_SRC
     docs/mainpage.dox.tmpl
+    docs/guide-amqp_connection_options.dox.tmpl
+    docs/guide-amqp_exceptions.dox.tmpl
+    docs/guide-amqparch.dox.tmpl
+    docs/guide-amqpexamples.dox.tmpl
+    docs/guide-amqphashdecls.dox.tmpl
+    docs/guide-amqprelnotes.dox.tmpl
+    docs/guide-amqptypemap.dox.tmpl
 )
 
 add_library(${module_name} MODULE ${CPP_SRC} ${QPP_SOURCES})
@@ -134,6 +141,18 @@ if (DEFINED ENV{DOXYGEN_EXECUTABLE})
     set(DOXYGEN_EXECUTABLE $ENV{DOXYGEN_EXECUTABLE})
 endif()
 
+list(APPEND MODULE_DOX_INPUT
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-amqp_connection_options.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-amqp_exceptions.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-amqparch.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-amqpexamples.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-amqphashdecls.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-amqprelnotes.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-amqptypemap.dox
+)
+set(QORE_DOXYGEN_IMAGES
+    "${CMAKE_SOURCE_DIR}/qlib/AmqpDataProvider/amqp-logo.svg"
+)
 qore_external_binary_module(${module_name} ${PROJECT_VERSION})
 
 qore_dist(${PROJECT_VERSION})
@@ -172,55 +191,5 @@ if (DOXYGEN_FOUND)
     add_custom_target(QORE_MOD_DOX_FILES DEPENDS ${QORE_DOX_SRC})
     add_dependencies(docs-module QORE_MOD_DOX_FILES)
 
-    # Two-phase doc build: the initial pass (docs-module) generates amqp.tag with empty
-    # TAGFILES. User module docs (docs-AmqpUtil, docs-AmqpDataProvider) are then built using
-    # amqp.tag, generating their own tag files. The final pass (docs-module-final) rebuilds
-    # the binary module docs with user module tag files in TAGFILES, enabling @ref
-    # cross-references from the mainpage into user module symbols.
-
-    # Suppress unresolved cross-reference warnings in the initial pass
-    file(APPEND ${CMAKE_BINARY_DIR}/Doxyfile
-        "\n# Suppress warnings for initial pass (no user module TAGFILES available)\nWARN_IF_DOC_ERROR = NO\n")
-
-    # Create final-pass Doxyfile from the binary module's Doxyfile with user module tag files
-    string(CONCAT _tagfiles "\"${CMAKE_BINARY_DIR}/AmqpUtil.tag=../../AmqpUtil/html\" "
-        "\"${CMAKE_BINARY_DIR}/AmqpDataProvider.tag=../../AmqpDataProvider/html\"")
-    # AmqpUtil's overview also links back to AmqpDataProvider. Build its final
-    # pages after the provider index exists, without introducing a dependency
-    # cycle between the initial tag-generation passes.
-    set(_util_doxyfile "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.AmqpUtil")
-    file(APPEND "${_util_doxyfile}" "\nWARN_IF_DOC_ERROR = NO\n")
-    configure_file("${_util_doxyfile}" "${_util_doxyfile}.final" COPYONLY)
-    file(APPEND "${_util_doxyfile}.final"
-        "\nTAGFILES += \"${CMAKE_BINARY_DIR}/AmqpDataProvider.tag=../../AmqpDataProvider/html\"\n"
-        "WARN_IF_DOC_ERROR = YES\n")
-    add_custom_target(docs-AmqpUtil-final
-        COMMAND ${DOXYGEN_EXECUTABLE} "${_util_doxyfile}.final"
-        COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post
-            "${CMAKE_BINARY_DIR}/docs/AmqpUtil/html"
-            "${CMAKE_BINARY_DIR}/docs/AmqpUtil/html/search"
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-        COMMENT "Generating AmqpUtil documentation with provider cross-references"
-        VERBATIM
-    )
-    add_dependencies(docs-AmqpUtil-final docs-AmqpDataProvider)
-    set(_doc_deps docs-AmqpUtil-final docs-AmqpDataProvider)
-
-    file(COPY_FILE ${CMAKE_BINARY_DIR}/Doxyfile ${CMAKE_BINARY_DIR}/Doxyfile.final)
-    file(APPEND ${CMAKE_BINARY_DIR}/Doxyfile.final
-        "\n# Final pass: enable user module cross-references and re-enable doc error warnings\n"
-        "TAGFILES += ${_tagfiles}\n"
-        "WARN_IF_DOC_ERROR = YES\n")
-
-    add_custom_target(docs-module-final
-        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/Doxyfile.final
-        COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post
-            ${CMAKE_BINARY_DIR}/docs/${module_name}/html
-            ${CMAKE_BINARY_DIR}/docs/${module_name}/html/search
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-        COMMENT "Generating API documentation with Doxygen (final pass with user module cross-references)"
-        VERBATIM
-    )
-    add_dependencies(docs-module-final ${_doc_deps})
-    add_dependencies(docs docs-module-final)
+    qore_binary_module_two_phase_docs(${module_name} "AmqpDataProvider;AmqpUtil")
 endif()

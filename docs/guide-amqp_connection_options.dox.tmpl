@@ -1,0 +1,19 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page amqp_connection_optionsguide Connection Options Reference
+
+    @tableofcontents
+
+    |!Option|!Type|!Default|!Description
+    |\c url|string|(required)|Broker URL (\c amqp:// or \c amqps://)
+    |\c ssl|@ref Qore::Amqp::AmqpSslOptions|—|TLS/SSL configuration
+    |\c sasl|@ref Qore::Amqp::AmqpSaslOptions|—|SASL authentication
+    |\c heartbeat|int|0|Heartbeat interval in seconds
+    |\c idle_timeout|int|0|Idle timeout in milliseconds
+    |\c max_frame_size|int|0|Maximum frame size in bytes
+    |\c container_id|string|auto|Container identifier
+    |\c virtual_host|string|—|Virtual host name
+    |\c reconnect|bool|False|Enable automatic reconnection
+    |\c max_reconnect_attempts|int|0|Max reconnect attempts (0 = unlimited)
+    |\c reconnect_delay_ms|int|1000|Delay between reconnect attempts
+*/

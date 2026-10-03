@@ -1,0 +1,16 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page amqparchguide Architecture
+
+    @tableofcontents
+
+    The module uses a three-layer architecture:
+    - \c amqp (binary module): C++ wrapper around \c qpid-proton-cpp providing @ref Qore::Amqp::AmqpConnection
+      and @ref Qore::Amqp::AmqpMessage
+    - \c AmqpUtil (pure %Qore): High-level API with @ref Amqp::AmqpClient "AmqpClient",
+      @ref Amqp::AmqpProducer "AmqpProducer", @ref Amqp::AmqpConsumer "AmqpConsumer",
+      @ref Amqp::AmqpRequestReply "AmqpRequestReply", and
+      @ref Amqp::AmqpManagementClient "AmqpManagementClient"
+    - \c AmqpDataProvider (pure %Qore): Data provider integration with factory, connection scheme, and
+      observable message events
+*/
