@@ -155,6 +155,8 @@ module AmqpDataProvider {
 
     @section amqpdataproviderintro AmqpDataProvider Module Introduction
 
+    <img src="amqp-logo.svg" width="96" alt="AmqpDataProvider module logo"/>
+
     The %AmqpDataProvider module integrates AMQP 1.0 messaging into Qore's data
     provider framework, enabling AMQP send/receive operations to be used alongside
     REST, gRPC, SOAP, and other protocols through a uniform API.

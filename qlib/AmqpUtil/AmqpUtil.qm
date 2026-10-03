@@ -59,7 +59,7 @@ public namespace Amqp {
     @section amqputilintro AmqpUtil Module Introduction
 
     The %AmqpUtil module provides a high-level pure-Qore API for AMQP 1.0 messaging
-    built on top of the \c amqp binary module (which wraps Apache Qpid Proton C++).
+    built on top of the @ref amqpintro "amqp binary module" (which wraps Apache Qpid Proton C++).
 
     This module provides convenient wrapper classes for common messaging patterns:
     - @ref Amqp::AmqpClient "AmqpClient": central client class for connection management,

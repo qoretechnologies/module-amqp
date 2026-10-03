@@ -4,6 +4,8 @@
 
     @section amqpintro amqp Module Introduction
 
+    <img src="amqp-logo.svg" width="96" alt="amqp module logo"/>
+
     The \c amqp module provides an AMQP 1.0 messaging interface for %Qore using the
     <a href="https://qpid.apache.org/proton/">Apache Qpid Proton</a> C++ library.
 
@@ -18,44 +20,19 @@
     - The @ref amqputilintro "AmqpUtil" module with high-level client, producer, consumer, and request-reply helpers
     - The @ref amqpdataproviderintro "AmqpDataProvider" module for data provider framework integration
 
-    @section amqparch Architecture
-
-    @subpage amqparchguide
-
-
-    @section amqphashdecls Hashdecls
-
-    @subpage amqphashdeclsguide
-
-
-    @section amqptypemap Type Mapping
-
-    @subpage amqptypemapguide
-
-
-    @section amqpexamples Usage Examples
-
-    @subpage amqpexamplesguide
-
-
-    @section amqp_connection_options Connection Options Reference
-
-    @subpage amqp_connection_optionsguide
-
-
-    @section amqp_exceptions Exception Reference
-
-    @subpage amqp_exceptionsguide
-
-
-    @section amqprelnotes Release Notes
-
-    @subpage amqprelnotesguide
-
-
     @section amqpqlibmodules Qore User Modules
 
-    - <img src="amqp-logo.svg" width="28" height="28" alt="AmqpDataProvider app icon"/> @ref amqpdataproviderintro "AmqpDataProvider" — a data provider API for AMQP 1.0 messaging
+    - @ref amqpdataproviderintro "AmqpDataProvider" — a data provider API for AMQP 1.0 messaging
     - @ref amqputilintro "AmqpUtil" — Qore AMQP 1.0 utility module
+
+    @section amqpdocumentation Documentation
+
+    - @anchor amqpexamples @subpage amqpexamplesguide — sending, receiving, subscriptions, and transactions
+    - @anchor amqparch @subpage amqparchguide — connection, session, and message flow
+    - @anchor amqp_connection_options @subpage amqp_connection_optionsguide — connection settings and defaults
+    - @anchor amqptypemap @subpage amqptypemapguide — converting AMQP values to and from Qore types
+    - @anchor amqphashdecls @subpage amqphashdeclsguide — typed connection and message metadata
+    - @anchor amqp_exceptions @subpage amqp_exceptionsguide — errors reported by the module
+    - @anchor amqprelnotes @subpage amqprelnotesguide — version history
 
 */
