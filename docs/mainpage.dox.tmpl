@@ -15,7 +15,7 @@
     - Durable subscriptions and message selectors
     - Transaction support (commit/rollback)
     - Broker introspection via the AMQP Management Protocol
-    - The @ref AmqpUtil "AmqpUtil" module with high-level client, producer, consumer, and request-reply helpers
+    - The @ref amqputilintro "AmqpUtil" module with high-level client, producer, consumer, and request-reply helpers
     - The @ref AmqpDataProvider "AmqpDataProvider" module for data provider framework integration
 
     @section amqparch Architecture
@@ -648,7 +648,7 @@ if (msg) {
 
     Credentials in the AMQP URL (\c amqp://user:pass@@host) are automatically
     extracted and used for SASL authentication. Explicit \c sasl options in
-    @ref AmqpConnectionOptions override URL credentials.
+    @ref Qore::Amqp::AmqpConnectionOptions override URL credentials.
 
     @code{.py}
 # Credentials from URL — no separate sasl options needed
@@ -662,8 +662,8 @@ conn.connect();  # authenticates as myuser
 
     |!Option|!Type|!Default|!Description
     |\c url|string|(required)|Broker URL (\c amqp:// or \c amqps://)
-    |\c ssl|@ref AmqpSslOptions|—|TLS/SSL configuration
-    |\c sasl|@ref AmqpSaslOptions|—|SASL authentication
+    |\c ssl|@ref Qore::Amqp::AmqpSslOptions|—|TLS/SSL configuration
+    |\c sasl|@ref Qore::Amqp::AmqpSaslOptions|—|SASL authentication
     |\c heartbeat|int|0|Heartbeat interval in seconds
     |\c idle_timeout|int|0|Idle timeout in milliseconds
     |\c max_frame_size|int|0|Maximum frame size in bytes
