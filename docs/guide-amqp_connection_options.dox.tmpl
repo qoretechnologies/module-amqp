@@ -16,4 +16,16 @@
     |\c reconnect|bool|False|Enable automatic reconnection
     |\c max_reconnect_attempts|int|0|Max reconnect attempts (0 = unlimited)
     |\c reconnect_delay_ms|int|1000|Delay between reconnect attempts
+
+    @section amqp_tls_options TLS Configuration
+
+    With an \c amqps:// URL, the \c ssl options accept a custom CA certificate
+    through \c ca_cert and a client identity through \c client_cert and
+    \c client_key. The client certificate and key must be supplied together.
+    Certificate and key files are checked against the caller's filesystem
+    sandbox before the connection thread reads them.
+
+    Server certificate and hostname verification are enabled by default.
+    Setting \c verify to \c False disables both checks. See
+    @ref Qore::Amqp::AmqpSslOptions "AmqpSslOptions" for the complete options.
 */

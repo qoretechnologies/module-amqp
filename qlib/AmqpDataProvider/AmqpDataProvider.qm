@@ -227,14 +227,6 @@ module AmqpDataProvider {
 
     @subsection amqpdataprovider_v1_0 AmqpDataProvider v1.0
     - initial release
-    - @ref AmqpDataProvider::AmqpDataProvider "AmqpDataProvider": root provider with
-      address discovery via manual config or AMQP Management Protocol
-    - @ref AmqpDataProvider::AmqpAddressDataProvider "AmqpAddressDataProvider":
-      address-level send via \c doRequest()
-    - @ref AmqpDataProvider::AmqpEventDataProvider "AmqpEventDataProvider":
-      observable event provider for incoming messages
-    - @ref AmqpDataProvider::AmqpDataProviderConnection "AmqpDataProviderConnection":
-      \c amqp:// and \c amqps:// connection schemes
 */
 
 #! Contains all public definitions in the AmqpDataProvider module

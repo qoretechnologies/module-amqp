@@ -4,34 +4,6 @@
 
     @tableofcontents
 
-    - documentation uses the public native API declarations and preserves language
-      indexes when adding cross-references to the helper modules
-
-    - fixed custom TLS CA trust, client certificate/key handling and verification policy;
-      certificate files are checked against the caller's sandbox before use
-
     @section amqp_v1_0 amqp Module Version 1.0
     - initial release
-    - @ref Qore::Amqp::AmqpConnection "AmqpConnection" class for AMQP 1.0 messaging
-    - @ref Qore::Amqp::AmqpMessage "AmqpMessage" class with full type mapping and delivery tag support
-    - TLS/SSL and SASL authentication with URL credential extraction
-    - Delivery disposition: accept, reject, release, modify
-    - Durable subscriptions with close/unsubscribe lifecycle
-    - JMS-style message selectors via @ref Qore::Amqp::AmqpFilterOptions "AmqpFilterOptions"
-    - Transacted message delivery: begin/commit/rollback with TransactionalState on TRANSFER frames
-    - AMQP Management Protocol for broker introspection (addresses, queues)
-    - Batch send via \c sendBatch() for efficient bulk publishing
-    - Shared subscriptions via source capabilities (\c shared, \c global)
-    - Connection statistics: message/byte counts, link count, uptime
-    - Graceful link close: \c closeSender(), \c closeReceiver()
-    - Connection lifecycle events: connected, disconnected, error, reconnected
-    - Automatic link recovery on reconnection (\c setAutoRecoverLinks())
-    - @ref Amqp::AmqpClient "AmqpClient" high-level API with cached sender/receiver links
-    - @ref Amqp::AmqpProducer "AmqpProducer" and @ref Amqp::AmqpConsumer "AmqpConsumer" for dedicated messaging
-    - @ref Amqp::AmqpRequestReply "AmqpRequestReply" for request-reply pattern with auto-correlation
-    - @ref Amqp::AmqpManagementClient "AmqpManagementClient" for broker introspection
-    - @ref Amqp::AmqpConnectionObservable "AmqpConnectionObservable" for connection event Observer pattern
-    - @ref Amqp::AmqpMessageConverter "AmqpMessageConverter" for auto-encode/decode (JSON, YAML, XML)
-    - Dead letter queue routing via @ref Amqp::AmqpConsumer::rejectToDlq() "rejectToDlq()"
-    - @ref amqpdataproviderintro "AmqpDataProvider" module with factory, connection schemes, and observable events
 */
