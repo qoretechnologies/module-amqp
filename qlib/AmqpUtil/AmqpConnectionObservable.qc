@@ -40,12 +40,22 @@ public const EVENT_AMQP_RECONNECTED = "amqp-reconnected";
 
     @par Example
     @code{.py}
+%modern
+%requires amqp
+%requires AmqpUtil
+%requires DataProvider
+
+class ConnectionObserver inherits Observer {
+    update(string event_id, hash<auto> data) {
+        printf("Connected at %y\n", data.timestamp);
+    }
+}
+
 AmqpClient client("amqp://localhost:5672");
 AmqpConnectionObservable obs(client.getConnection());
-obs.registerObserver("amqp-connected", sub (string event_id, hash<auto> data) {
-    printf("Connected at %y\n", data.timestamp);
-});
+obs.registerObserver(new ConnectionObserver(), EVENT_AMQP_CONNECTED);
 client.connect();
+on_exit client.close();
 obs.checkEvents();  # dispatches pending events
     @endcode
 */

@@ -1,3 +1,4 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
 cmake_minimum_required(VERSION 3.21)
 
 project(qore-amqp-module)
@@ -22,6 +23,7 @@ if (UNIX AND NOT APPLE)
     set(LINUX TRUE)
 endif()
 
+set(QORE_DOXYGEN_MODULES DataProvider ConnectionProvider)
 find_package(Qore 2.0 REQUIRED)
 
 # Find Qpid Proton C++ library

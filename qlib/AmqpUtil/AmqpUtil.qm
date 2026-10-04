@@ -75,16 +75,34 @@ public namespace Amqp {
     For the data provider API integration (factory, connections, action catalog),
     see the @ref amqpdataproviderintro "AmqpDataProvider module".
 
-    @section amqputil_client_usage Client Usage
+    @section amqputildocumentation Documentation
 
-    @subsection amqputil_simple Simple Send/Receive
+    - @anchor amqputil_client_usage @anchor amqputil_simple @anchor amqputil_producer_consumer @anchor amqputil_requestreply @anchor amqputil_transactions @anchor amqputil_durable @anchor amqputil_management @subpage amqputilcookbook — send, receive, request-reply, transactions, and broker discovery
+    - @anchor amqputilrelnotes @subpage amqputilreleasenotes — version history
+*/
+
+/** @page amqputilcookbook Messaging Cookbook
+
+    @tableofcontents
+
+    These examples require an AMQP 1.0 broker with the example queues already configured.
+    Replace the demonstration URL with your broker URL. Publishing before a queue or subscription exists
+    can discard messages even when the broker accepts the send.
+    See @ref amqp_connection_optionsguide for authentication and TLS settings.
+    Each example closes the connection even if an operation raises an exception.
+
+    @section amqputilcookbooksimple Simple Send/Receive
+
+    Use @ref Amqp::AmqpClient::send() and @ref Amqp::AmqpClient::receive() for one-off operations.
 
     @code{.py}
 %modern
+%requires amqp
 %requires AmqpUtil
 
 AmqpClient client("amqp://guest:guest\@localhost:5672");
 client.connect();
+on_exit client.close();
 
 # Simple send
 client.send("my-queue", "Hello, AMQP!");
@@ -94,15 +112,19 @@ client.send("my-queue", "Hello, AMQP!");
 if (msg) {
     printf("Received: %y\n", msg.getBody());
 }
-
-client.close();
     @endcode
 
-    @subsection amqputil_producer_consumer Producer/Consumer Pattern
+    @section amqputilcookbookproducerconsumer Producer/Consumer Pattern
+
+    Reuse @ref Amqp::AmqpProducer and @ref Amqp::AmqpConsumer for repeated operations on an address.
 
     @code{.py}
+%modern
+%requires amqp
+%requires AmqpUtil
 AmqpClient client("amqp://guest:guest\@localhost:5672");
 client.connect();
+on_exit client.close();
 
 AmqpProducer producer = client.createProducer("my-queue");
 producer.send("Message 1");
@@ -112,43 +134,58 @@ AmqpConsumer consumer = client.createConsumer("my-queue");
 while (*AmqpMessage msg = consumer.receive(5s)) {
     printf("Got: %y\n", msg.getBody());
 }
-
-client.close();
     @endcode
 
-    @subsection amqputil_requestreply Request-Reply Pattern
+    @section amqputilcookbookrequestreply Request-Reply Pattern
+
+    Use @ref Amqp::AmqpRequestReply::request() with a service listening on the request address.
 
     @code{.py}
+%modern
+%requires amqp
+%requires AmqpUtil
 AmqpClient client("amqp://guest:guest\@localhost:5672");
 client.connect();
+on_exit client.close();
 
 AmqpRequestReply rr(client, "request-queue");
+on_exit rr.close();
 AmqpMessage response = rr.request("ping", 10s);
 printf("Reply: %y\n", response.getBody());
-
-rr.close();
-client.close();
     @endcode
 
-    @subsection amqputil_transactions Transactions
+    @section amqputilcookbooktransactions Transactions
+
+    Use @ref Amqp::AmqpClient::beginTransaction(), @ref Amqp::AmqpClient::commitTransaction(), and
+    @ref Amqp::AmqpClient::rollbackTransaction() with a broker supporting AMQP transactions.
 
     @code{.py}
+%modern
+%requires amqp
+%requires AmqpUtil
 AmqpClient client("amqp://guest:guest\@localhost:5672");
 client.connect();
+on_exit client.close();
 
 client.beginTransaction();
+on_error client.rollbackTransaction();
 client.send("my-queue", "transacted message 1");
 client.send("my-queue", "transacted message 2");
 client.commitTransaction();
-
-client.close();
     @endcode
 
-    @subsection amqputil_durable Durable Subscriptions
+    @section amqputilcookbookdurable Durable Subscriptions
+
+    Use @ref Amqp::AmqpConsumer::closeDurable() to retain a subscription and
+    @ref Amqp::AmqpConsumer::unsubscribe() to remove it. The broker must support durable subscriptions.
 
     @code{.py}
+%modern
+%requires amqp
+%requires AmqpUtil
 AmqpClient client("amqp://guest:guest\@localhost:5672");
 client.connect();
+on_exit client.close();
 
 AmqpConsumer consumer = client.createDurableConsumer("topic/news", "my-sub");
 *AmqpMessage msg = consumer.receive(5s);
@@ -159,26 +196,31 @@ consumer = client.createDurableConsumer("topic/news", "my-sub");
 # Messages accumulated while disconnected are available
 
 consumer.unsubscribe();  # permanently remove subscription
-client.close();
     @endcode
 
-    @subsection amqputil_management Broker Introspection
+    @section amqputilcookbookmanagement Broker Introspection
+
+    Use @ref Amqp::AmqpManagementClient::queryAddresses() with a broker supporting the AMQP Management Protocol.
 
     @code{.py}
+%modern
+%requires amqp
+%requires AmqpUtil
 AmqpClient client("amqp://guest:guest\@localhost:5672");
 client.connect();
+on_exit client.close();
 
 AmqpManagementClient mgmt = client.getManagementClient();
 list<hash<AmqpAddressInfo>> addresses = mgmt.queryAddresses();
-for (hash<AmqpAddressInfo> addr in addresses) {
+foreach hash<AmqpAddressInfo> addr in (addresses) {
     printf("Address: %s (type: %s)\n", addr.name, addr.routing_type);
 }
-
-client.close();
     @endcode
 
-    @section amqputilrelnotes Release Notes
+*/
 
-    @subsection amqputil_v1_0 AmqpUtil Module Version 1.0
+/** @page amqputilreleasenotes Release Notes
+
+    @section amqputil_v1_0 AmqpUtil Module Version 1.0
     - initial release
 */

@@ -157,75 +157,185 @@ module AmqpDataProvider {
 
     <img src="amqp-logo.svg" width="96" alt="AmqpDataProvider module logo"/>
 
-    The %AmqpDataProvider module integrates AMQP 1.0 messaging into Qore's data
-    provider framework, enabling AMQP send/receive operations to be used alongside
-    REST, gRPC, SOAP, and other protocols through a uniform API.
+    The %AmqpDataProvider module integrates AMQP 1.0 messaging with the
+    @ref dataproviderintro "DataProvider" and @ref connectionproviderintro "ConnectionProvider" frameworks.
+    It builds on @ref amqputilintro "AmqpUtil" and the @ref amqpintro "amqp binary module".
 
-    Key capabilities:
-    - <b>Send messages</b>: send messages to any AMQP address via \c doRequest()
-    - <b>Observable events</b>: receive messages as observable events via the
-      DataProvider observer pattern
-    - <b>Auto-discovery</b>: when \c use_management is \c True, the broker is
-      queried via the AMQP Management Protocol to auto-discover addresses
-    - <b>Connection management</b>: \c amqp:// and \c amqps:// URL schemes
-      integrate with Qore's connection framework
+    - Send messages to a queue or topic through @ref DataProvider::AbstractDataProvider::doRequest() "doRequest()"
+    - Receive messages as @ref AmqpDataProvider::EVENT_AMQP_MESSAGE "AMQP message events"
+    - Expose configured addresses, optionally augmented by broker discovery
+    - Use plaintext or TLS connections through the \c amqp:// and \c amqps:// schemes
 
-    @subsection amqpdataprovider_hierarchy Provider Hierarchy
+    @anchor amqpdataprovider_classes
+    @section amqpdataproviderapi API Overview
+
+    |!Class|!Purpose
+    |@ref AmqpDataProvider::AmqpDataProvider "AmqpDataProvider"|Root provider exposing broker addresses
+    |@ref AmqpDataProvider::AmqpDataProviderFactory "AmqpDataProviderFactory"|Factory registered as \c amqp
+    |@ref AmqpDataProvider::AmqpAddressDataProvider "AmqpAddressDataProvider"|Send messages to a selected address
+    |@ref AmqpDataProvider::AmqpEventDataProvider "AmqpEventDataProvider"|Observe incoming messages on an address
+    |@ref AmqpDataProvider::AmqpDataProviderConnection "AmqpDataProviderConnection"|Create providers through a named connection
+
+    @section amqpdataproviderdocumentation Documentation
+
+    - @anchor amqpdataprovider_hierarchy @anchor amqpdataprovider_factory @anchor amqpdataprovider_factory_options @anchor amqpdataprovider_connections @subpage amqpdataproviderconfiguration — provider paths, options, discovery, connections, and message contracts
+    - @anchor amqpdataprovider_examples @anchor amqpdataprovider_examples_send @anchor amqpdataprovider_examples_management @subpage amqpdataprovidercookbook — sending and observing messages, plus command-line usage
+    - @anchor amqpdataprovider_relnotes @subpage amqpdataproviderreleasenotes — version history
+*/
+
+/** @page amqpdataproviderconfiguration Provider Configuration and Message Contracts
+
+    @tableofcontents
+
+    @section amqpdataproviderconfigurationpaths Provider Paths
+
+    The factory name is \c amqp. Create a provider through
+    @ref DataProvider::DataProvider::getFactory() or construct @ref AmqpDataProvider::AmqpDataProvider directly.
+    A provider created from options connects to the broker during construction.
+
+    |!Path|!Provider|!Operation
+    |Root|@ref AmqpDataProvider::AmqpDataProvider "AmqpDataProvider"|List configured or discovered addresses
+    |<tt>/&lt;address&gt;</tt>|@ref AmqpDataProvider::AmqpAddressDataProvider "AmqpAddressDataProvider"|Send through @ref DataProvider::AbstractDataProvider::doRequest() "doRequest()"
+    |<tt>/&lt;address&gt;/events</tt>|@ref AmqpDataProvider::AmqpEventDataProvider "AmqpEventDataProvider"|Observe incoming messages
+
+    Address children must be present in the configured or discovered address list.
+    Merely naming an arbitrary address in a provider path does not add it to that list.
+
+    @section amqpdataproviderconfigurationoptions Factory Options
+
+    These options are declared by @ref AmqpDataProvider::AmqpDataProvider::ConstructorOptions "ConstructorOptions".
+    See @ref amqpdataprovidercookbook for complete examples.
+
+    |!Option|!Type|!Default|!Meaning
+    |\c url|string|Required|Broker URL using \c amqp:// or \c amqps://, optionally including credentials
+    |\c addresses|string|No addresses|Comma-separated addresses to expose; surrounding whitespace is trimmed
+    |\c use_management|bool|\c False|Append addresses discovered through the broker's AMQP Management Protocol
+    |\c username|string|From URL|SASL PLAIN username; explicit credentials override URL credentials
+    |\c password|string|From URL|SASL PLAIN password; sensitive value
+    |\c timeout_ms|int|\c 30000|Timeout passed to event providers for each receive operation, in milliseconds
+
+    Manual addresses remain available when management discovery is unsupported or fails.
+    Discovery adds unique broker addresses to the configured list; it does not create queues or topics.
+    Provision a queue or subscription before publishing. A broker can accept a message even when no queue
+    or subscriber is available to receive it; acceptance does not establish a route for future consumers.
+    With neither configured addresses nor successful discovery, the root has no address children.
+
+    The \c timeout_ms provider option controls event receives; send operations use the underlying
+    @ref Amqp::AmqpClient::send() "AmqpClient::send()" defaults. For custom native connection options,
+    create an @ref Amqp::AmqpClient "AmqpClient" from @ref Qore::Amqp::AmqpConnectionOptions "AmqpConnectionOptions"
+    and pass that connected client to @ref AmqpDataProvider::AmqpDataProvider "AmqpDataProvider".
+    See @ref amqp_connection_optionsguide for TLS, SASL, and reconnect settings.
+
+    @section amqpdataproviderconfigurationconnections Connection Schemes
+
+    @ref AmqpDataProvider::AmqpDataProviderConnection registers \c amqp:// for plaintext AMQP 1.0 and
+    \c amqps:// for TLS. Its connection options are \c addresses, \c use_management, and \c timeout_ms;
+    credentials belong in the connection URL. Call
+    @ref AmqpDataProvider::AmqpDataProviderConnection::getDataProvider() "getDataProvider()" to create the provider.
+    See @ref connectionproviderintro "ConnectionProvider" for named connection management.
+
+    @section amqpdataproviderconfigurationmessages Sending and Receiving
+
+    @ref AmqpDataProvider::AmqpSendRequestDataType defines the send request: \c body is required;
+    \c content_type, \c message_id, \c correlation_id, \c reply_to, \c subject, and
+    \c application_properties are optional message metadata. Setting \c content_type does not serialize the
+    body: AMQP values use the @ref amqptypemapguide "native type mapping". For format conversion, use
+    @ref Amqp::AmqpMessageConverter "AmqpMessageConverter" before sending.
+
+    @ref AmqpDataProvider::AmqpSendResponseDataType describes the response's \c settled and \c state fields.
+    Inspect the delivery state as well as settlement; settlement alone is not a guarantee of acceptance.
+    See @ref Qore::Amqp::AmqpDeliveryInfo "AmqpDeliveryInfo".
+
+    Incoming @ref AmqpDataProvider::EVENT_AMQP_MESSAGE "AMQP message events" carry the fields described by
+    @ref AmqpDataProvider::AmqpMessageEventDataType. Register observers before calling
+    @ref AmqpDataProvider::AmqpEventDataProvider::observersReady() "observersReady()" and call
+    @ref AmqpDataProvider::AmqpEventDataProvider::stopEvents() "stopEvents()" before closing the shared client.
+*/
+
+/** @page amqpdataprovidercookbook Messaging Cookbook
+
+    @tableofcontents
+
+    Examples require an AMQP 1.0 broker with a queue named \c orders already configured.
+    Replace the demonstration URL with your broker URL. See @ref amqpdataproviderconfiguration for options.
+
+    @section amqpdataprovidercookbooksend Send a Message
+
+    Sharing an @ref Amqp::AmqpClient "AmqpClient" gives the caller explicit control over connection cleanup.
+    @ref DataProvider::AbstractDataProvider::getChildProviderEx() "getChildProviderEx()" rejects unknown addresses.
+
+    @code{.py}
+%modern
+%requires AmqpDataProvider
+%requires AmqpUtil
+
+AmqpClient client("amqp://guest:guest\@localhost:5672");
+client.connect();
+on_exit client.close();
+AmqpDataProvider provider(client, ("orders",));
+AbstractDataProvider address = provider.getChildProviderEx("orders");
+hash<auto> result = address.doRequest({
+    "body": {"order_id": 123, "status": "ready"},
+    "subject": "order.ready",
+});
+printf("Delivery state: %s (settled: %y)\n", result.state, result.settled);
+    @endcode
+
+    @section amqpdataprovidercookbookreceive Receive an Event
+
+    This example receives one event or raises a queue timeout after five seconds.
+    @ref DataProvider::Observer "Observer" implements the event callback;
+    @ref Qore::Thread::Queue "Queue" transfers the event from the background observer to the caller.
+
+    @code{.py}
+%modern
+%requires AmqpDataProvider
+%requires AmqpUtil
+
+class MessageObserver inherits Observer {
+    private {
+        Queue<hash<auto>> received;
+    }
+
+    constructor(Queue<hash<auto>> queue) {
+        self.received = queue;
+    }
+
+    update(string event_id, hash<auto> data) {
+        self.received.push(data);
+    }
+}
+
+AmqpClient client("amqp://guest:guest\@localhost:5672");
+client.connect();
+on_exit client.close();
+AmqpEventDataProvider events(client, "orders", 1000);
+Queue<hash<auto>> received();
+events.registerObserver(new MessageObserver(received), EVENT_AMQP_MESSAGE);
+events.observersReady();
+on_exit events.stopEvents();
+hash<auto> message = received.get(5000);
+printf("Received: %y\n", message.body);
+    @endcode
+
+    @section amqpdataprovidercookbookcli Command-Line Usage
+
+    Use \c qdp to send through the \c amqp factory:
 
     @verbatim
-<root>                          (AmqpDataProvider)
-  └── <address>                 (AmqpAddressDataProvider — doRequest for send)
-        └── events              (AmqpEventDataProvider — observable incoming messages)
+qdp 'amqp{url=amqp://guest:guest@localhost:5672,addresses=orders}/orders' dor body=Hello
     @endverbatim
 
-    @subsection amqpdataprovider_classes Provided Classes
+    To list addresses discovered through the AMQP Management Protocol:
 
-    - @ref AmqpDataProvider::AmqpDataProvider "AmqpDataProvider": root provider
-      with address discovery
-    - @ref AmqpDataProvider::AmqpDataProviderFactory "AmqpDataProviderFactory":
-      factory for creating providers from options
-    - @ref AmqpDataProvider::AmqpAddressDataProvider "AmqpAddressDataProvider":
-      address-level provider supporting send via \c doRequest()
-    - @ref AmqpDataProvider::AmqpEventDataProvider "AmqpEventDataProvider":
-      observable event provider for incoming messages
-    - @ref AmqpDataProvider::AmqpDataProviderConnection "AmqpDataProviderConnection":
-      connection provider with \c amqp:// and \c amqps:// URL schemes
-
-    @section amqpdataprovider_factory AmqpDataProvider Factory
-
-    The name of the AMQP data provider factory is <b><tt>amqp</tt></b>.
-
-    @subsection amqpdataprovider_factory_options Factory Options
-
-    |!Option|!Type|!Description
-    |\c url|string|Broker URL (\c amqp://host:port or \c amqps://host:port)
-    |\c addresses|string|Comma-separated list of AMQP addresses
-    |\c use_management|bool|Auto-discover addresses via AMQP Management Protocol (default: \c False)
-    |\c username|string|SASL username
-    |\c password|string|SASL password (sensitive)
-    |\c timeout_ms|int|Default timeout in milliseconds (default: \c 30000)
-
-    @section amqpdataprovider_examples AmqpDataProvider Examples
-
-    @subsection amqpdataprovider_examples_send Send a Message
-
-    @verbatim qdp 'amqp{url=amqp://guest:guest@localhost:5672,addresses=my-queue}/my-queue' dor body=Hello
+    @verbatim
+qdp 'amqp{url=amqp://guest:guest@localhost:5672,use_management=true}' children
     @endverbatim
+*/
 
-    @subsection amqpdataprovider_examples_management Auto-Discovery
+/** @page amqpdataproviderreleasenotes Release Notes
 
-    @verbatim qdp 'amqp{url=amqp://guest:guest@localhost:5672,use_management=true}' children
-    @endverbatim
-
-    @section amqpdataprovider_connections Connection Schemes
-
-    The module registers two connection URL schemes:
-    - \c amqp://host:port — plaintext AMQP 1.0
-    - \c amqps://host:port — TLS-encrypted AMQP 1.0
-
-    @section amqpdataprovider_relnotes Release Notes
-
-    @subsection amqpdataprovider_v1_0 AmqpDataProvider v1.0
+    @section amqpdataprovider_v1_0 AmqpDataProvider Module Version 1.0
     - initial release
 */
 

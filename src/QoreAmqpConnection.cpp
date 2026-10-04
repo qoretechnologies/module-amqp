@@ -88,15 +88,6 @@ std::string getStringVal(const QoreHashNode* h, const char* key) {
     return std::string(str->c_str(), str->size());
 }
 
-// Safely get an int from a Qore hash, default if missing
-int64 getIntVal(const QoreHashNode* h, const char* key, int64 def = 0) {
-    QoreValue v = h->getKeyValue(key);
-    if (v.isNullOrNothing()) {
-        return def;
-    }
-    return v.getAsBigInt();
-}
-
 // Try multiple key names, return first found int
 int64 getIntMulti(const QoreHashNode* h, std::initializer_list<const char*> keys, int64 def = 0) {
     for (const char* key : keys) {
@@ -2064,7 +2055,7 @@ void QoreAmqpConnection::beginTransaction(ExceptionSink* xsink) {
         pn_link_t* c_link = txn_coordinator_link_;
         static int declare_tag_counter = 0;
         std::string tag = "txn-declare-" + std::to_string(++declare_tag_counter);
-        pn_delivery_t* d = pn_delivery(c_link, pn_dtag(tag.c_str(), tag.size()));
+        pn_delivery(c_link, pn_dtag(tag.c_str(), tag.size()));
 
         // Encode Declare body: described type with descriptor 0x31 and empty list
         pn_message_t* msg = pn_message();
@@ -2154,7 +2145,7 @@ void QoreAmqpConnection::discharge(bool fail, ExceptionSink* xsink) {
         pn_link_t* c_link = txn_coordinator_link_;
         static int discharge_tag_counter = 0;
         std::string tag = "txn-discharge-" + std::to_string(++discharge_tag_counter);
-        pn_delivery_t* d = pn_delivery(c_link, pn_dtag(tag.c_str(), tag.size()));
+        pn_delivery(c_link, pn_dtag(tag.c_str(), tag.size()));
 
         pn_message_t* msg = pn_message();
         pn_data_t* body = pn_message_body(msg);
