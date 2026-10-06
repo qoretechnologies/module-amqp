@@ -347,6 +347,10 @@ qore --enable-debug test/AmqpUtil.qtest -vv
 qore --enable-debug test/AmqpDataProvider.qtest -vv
 ```
 
+The generated documentation is checked with `python3 -B -W error test/test_docs.py build -v`.
+The cookbook checks prefer this checkout's modules and preserve any inherited
+`QORE_MODULE_DIR` dependency paths, including builds using `QORE_MODULE_DIR_ONLY=1`.
+
 ## License
 
 MIT License - see [COPYING.MIT](COPYING.MIT) for details.

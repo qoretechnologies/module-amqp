@@ -11,11 +11,24 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from urllib.parse import unquote, urlsplit
 import xml.etree.ElementTree as ET
 
 BUILD = Path(sys.argv.pop(1)).resolve()
 SOURCE = Path(__file__).resolve().parents[1]
+
+
+def local_module_environment():
+    """Prefer this checkout while preserving an isolated SDK's dependency paths."""
+    env = dict(os.environ)
+    paths = [str(SOURCE / 'qlib'), str(BUILD)]
+    inherited = env.get('QORE_MODULE_DIR')
+    if inherited:
+        paths.append(inherited)
+    env['QORE_MODULE_DIR'] = os.pathsep.join(paths)
+    env.pop('LD_PRELOAD', None)
+    return env
 
 
 class Page(HTMLParser):
@@ -42,6 +55,25 @@ class Page(HTMLParser):
 
 
 class DocsTest(unittest.TestCase):
+    def test_example_environment_preserves_isolated_dependency_paths(self):
+        for inherited in (None, '', '/sdk/modules:/sdk/lib/qore-modules'):
+            with self.subTest(inherited=inherited):
+                original = {'QORE_MODULE_DIR_ONLY': '1', 'QORE_INCLUDE_DIR': '',
+                            'LD_LIBRARY_PATH': '/sdk/lib', 'LD_PRELOAD': '/test/probe.so'}
+                if inherited is not None:
+                    original['QORE_MODULE_DIR'] = inherited
+                with patch.dict(os.environ, original, clear=True):
+                    env = local_module_environment()
+                    self.assertEqual(original, dict(os.environ))
+                expected = [str(SOURCE / 'qlib'), str(BUILD)]
+                if inherited:
+                    expected.extend(inherited.split(os.pathsep))
+                self.assertEqual(expected, env['QORE_MODULE_DIR'].split(os.pathsep))
+                self.assertEqual('1', env['QORE_MODULE_DIR_ONLY'])
+                self.assertEqual('', env['QORE_INCLUDE_DIR'])
+                self.assertEqual('/sdk/lib', env['LD_LIBRARY_PATH'])
+                self.assertNotIn('LD_PRELOAD', env)
+
     def test_public_native_classes_and_methods_have_pages(self):
         compounds = {c.findtext('name'): c for c in ET.parse(BUILD / 'amqp.tag').findall('compound')}
         for name, method in [('AmqpConnection', 'connect'), ('AmqpMessage', 'getBody')]:
@@ -111,8 +143,7 @@ class DocsTest(unittest.TestCase):
                     self.assertRegex(config, r'GENERATE_TAGFILE\s*=\s*$')
 
     def test_cookbook_examples_parse_against_local_modules(self):
-        env = dict(os.environ, QORE_MODULE_DIR=f'{SOURCE / "qlib"}:{BUILD}')
-        env.pop('LD_PRELOAD', None)
+        env = local_module_environment()
         for module, filename, count in (
             ('AmqpDataProvider', 'AmqpDataProvider.qm', 2),
             ('AmqpUtil', 'AmqpUtil.qm', 6),
@@ -145,8 +176,7 @@ observer.update(EVENT_AMQP_MESSAGE, {"body": {"order_id": 123}});
 hash<auto> event = received.get(-1);
 @assert(event.body.order_id == 123);
 '''
-        env = dict(os.environ, QORE_MODULE_DIR=f'{SOURCE / "qlib"}:{BUILD}')
-        env.pop('LD_PRELOAD', None)
+        env = local_module_environment()
         with tempfile.TemporaryDirectory(prefix='amqp-doc-observer-') as directory:
             path = Path(directory) / 'observer.qr'
             path.write_text(script)
