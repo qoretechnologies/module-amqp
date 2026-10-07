@@ -326,11 +326,17 @@ AbstractDataProvider mgmt_provider = factory.create({
 ### Build
 
 ```bash
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=debug
-make -j4
-make install
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+cmake --build build -j4
+cmake --install build
 ```
+
+Match the installation prefix to the installed Qore SDK. For a Debug build,
+use `build-debug` with `-DCMAKE_BUILD_TYPE=Debug`.
+`cmake --build build --target uninstall` removes the files recorded by the
+last installation, including when `DESTDIR` is set for a staged installation.
+It preserves directories and unrelated files. RPM installations are removed
+through the distribution package manager.
 
 ### Running Tests
 
@@ -348,6 +354,7 @@ qore --enable-debug test/AmqpDataProvider.qtest -vv
 ```
 
 The generated documentation is checked with `python3 -B -W error test/test_docs.py build -v`.
+Manifest-based uninstallation is checked with `python3 -B -W error test/test_uninstall.py -v`.
 The cookbook checks prefer this checkout's modules and preserve any inherited
 `QORE_MODULE_DIR` dependency paths, including builds using `QORE_MODULE_DIR_ONLY=1`.
 

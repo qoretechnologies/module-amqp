@@ -12,7 +12,7 @@
 %bcond_without docs
 Name: qore-amqp-module
 Version: 1.0.0
-Release: 3%{?dist}
+Release: 4%{?dist}
 Summary: AMQP messaging and data providers for Qore
 License: MIT
 URL: https://github.com/qoretechnologies/module-amqp
@@ -92,6 +92,7 @@ hardlink -t -O %{buildroot}%{_docdir}/%{name}-doc
 %endif
 %check
 %if %{with tests}
+python3 -B -W error test/test_uninstall.py -v
 . %{_rpmconfigdir}/qore/module-env.sh
 unset AMQP_TEST_URL AMQP_TLS_TEST_URL AMQP_TLS_MTLS_URL AMQP_TLS_CA AMQP_TLS_WRONG_CA AMQP_TLS_CLIENT_CERT AMQP_TLS_CLIENT_KEY
 for test in test/*.qtest; do
@@ -123,6 +124,9 @@ python3 -B -W error test/test_docs.py build -v
 %doc %{_docdir}/%{name}-doc/
 %endif
 %changelog
+* Wed Oct 07 2026 David Nichols <david@qore.org> - 1.0.0-4
+- Normalize CMake installation paths and provide tested manifest-based uninstallation.
+
 * Tue Oct 06 2026 David Nichols <david@qore.org> - 1.0.0-3
 - Require XML at runtime for the compiled AmqpUtil and provider helpers.
 - Require the documentation SDK peer-index capability for documentation builds.

@@ -1,5 +1,5 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.21...3.31)
 
 project(qore-amqp-module)
 
