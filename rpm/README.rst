@@ -8,6 +8,9 @@ Qore 3.0 SDK and qore-rpm-macros. Apache Qpid Proton C++ is a system dependency.
 Native and AOT modules, source fallbacks, SDK metadata, provider resources and
 translations are installed together; documentation is a separate package.
 Qore ABI and minimum runtime requirements are generated from the built modules.
+XML is loaded while compiling the AOT helpers, so the RPM declares a native
+qore-xml-module runtime dependency as well as its build dependency. The source
+module keeps its optional XML loading behavior.
 
 From qore-packaging, prepare the committed source and build offline::
 
