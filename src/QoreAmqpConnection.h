@@ -71,9 +71,12 @@
 #include <atomic>
 
 //! Struct to hold received message + delivery info
+/** The delivery itself stays on the event thread (see QoreAmqpConnection::pending_deliveries_): Qore threads hold
+    only its tag
+*/
 struct ReceivedMessage {
     proton::message msg;
-    proton::delivery delivery;
+    proton::binary tag;
 };
 
 //! Wraps a proton::container + proton::messaging_handler for AMQP 1.0 connections
@@ -423,12 +426,25 @@ private:
         return true;
     }
 
-    //! Closes a sender created by work whose waiting thread gave up; called on the Proton event thread
-    DLLLOCAL void releaseSender(proton::sender& s, const std::string& name, const std::string& addr);
+    //! Closes a sender and forgets it; called on the Proton event thread
+    /** @param name the name of the sender
+        @param addr the address of the sender, to remove its entry from the reconnection registry
+    */
+    DLLLOCAL void closeSenderLink(const std::string& name, const std::string& addr);
 
-    //! Closes a receiver created by work whose waiting thread gave up; called on the Proton event thread
-    DLLLOCAL void releaseReceiver(proton::receiver& r, const std::string& name, const std::string& addr,
-        bool durable);
+    //! Closes a receiver and forgets it; called on the Proton event thread
+    /** @param name the name of the receiver
+        @param addr the address of the receiver, to remove its entry from the reconnection registry
+        @param durable true for a durable receiver, whose subscription is kept
+    */
+    DLLLOCAL void closeReceiverLink(const std::string& name, const std::string& addr, bool durable);
+
+    //! Releases the Proton objects of the connection; called when the event thread has ended
+    DLLLOCAL void clearLinks();
+
+    //! Settles a delivery received by receive() with the given disposition
+    DLLLOCAL void settle(const BinaryNode* delivery_tag, void (*disposition)(proton::delivery&),
+        ExceptionSink* xsink);
 
     //! Send an AMQP management request and receive a response
     DLLLOCAL QoreHashNode* managementRequest(const std::string& operation,
@@ -473,10 +489,16 @@ private:
     QoreCondition connect_cv_;
     std::string connect_error_;
 
-    // Sender/receiver maps
-    std::mutex links_mutex_;
+    // Proton objects (links, deliveries) are not thread-safe: they are created, used and destroyed on the event
+    // thread only, where they are found by name; Qore threads use the names
+    //! the senders by name; event thread only
     std::map<std::string, proton::sender> senders_;
+    //! the receivers by name; event thread only
     std::map<std::string, proton::receiver> receivers_;
+    //! the names of the open links, protected by links_mutex_
+    std::mutex links_mutex_;
+    std::set<std::string> sender_names_;
+    std::set<std::string> receiver_names_;
     int link_counter_ = 0;
 
     // Tracks receivers that have been attached at the broker (on_receiver_open
@@ -496,8 +518,11 @@ private:
     std::map<std::string, std::queue<ReceivedMessage>> received_messages_;
 
     // Delivery tracking for accept/reject/release/modify
-    std::mutex delivery_mutex_;
+    //! the deliveries to settle by tag key; event thread only
     std::map<std::string, proton::delivery> pending_deliveries_;
+    //! the tag keys of the deliveries to settle, protected by delivery_mutex_
+    std::mutex delivery_mutex_;
+    std::set<std::string> pending_tags_;
 
     // Send tracking
     std::mutex send_mutex_;

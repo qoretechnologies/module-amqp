@@ -1,0 +1,106 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+/*  amqp-threads.qtest
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Several threads create, use and close links of one connection at the same time (requires a broker via
+    AMQP_TEST_URL); run under a sanitizer to check that the Proton objects of the links are used on the connection's
+    event thread only
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+
+%requires QUnit
+%requires amqp
+
+%exec-class AmqpThreadsTest
+
+public class AmqpThreadsTest inherits QUnit::Test {
+    private {
+        *string url;
+
+        #! the number of threads that use the connection at the same time
+        const Threads = 8;
+        #! the number of link pairs that each thread creates, uses and closes
+        const Iterations = 25;
+    }
+
+    constructor() : Test("AmqpThreadsTest", "1.0", \ARGV) {
+        url = ENV.AMQP_TEST_URL;
+        addTestCase("concurrent links on one connection", \concurrentLinks());
+        set_return_value(main());
+    }
+
+    concurrentLinks() {
+        if (!url) {
+            testSkip("AMQP_TEST_URL not set");
+        }
+        AmqpConnection conn(<AmqpConnectionOptions>{"url": url});
+        conn.connect();
+        on_exit conn.close();
+        int links = conn.getStatistics().link_count;
+
+        Counter running(Threads);
+        Queue errors();
+        Queue received();
+        for (int t = 0; t < Threads; ++t) {
+            background sub (int thread) {
+                on_exit running.dec();
+                try {
+                    for (int i = 0; i < Iterations; ++i) {
+                        string address = sprintf("threads-test-%d-%d-%d-%d", getpid(), clock_get_monotonic_us(),
+                            thread, i);
+                        string receiver = conn.createReceiver(address);
+                        string sender = conn.createSender(address);
+                        conn.send(sender, new AmqpMessage(sprintf("%d-%d", thread, i)));
+                        conn.sendBatch(sender, (new AmqpMessage("batch-1"), new AmqpMessage("batch-2")));
+                        int count = 0;
+                        while (*AmqpMessage msg = conn.receive(receiver, 10s)) {
+                            conn.accept(msg.getDeliveryTag());
+                            if (++count == 3) {
+                                break;
+                            }
+                        }
+                        received.push(count);
+                        conn.closeSender(sender);
+                        conn.closeReceiver(receiver);
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    errors.push(sprintf("thread %d: %s: %s", thread, ex.err, ex.desc));
+                }
+            }(t);
+        }
+        running.waitForZero();
+
+        list<string> errs = map errors.get(), xrange(errors.size());
+        assertEq((), errs, errs ? sprintf("no thread fails; connection events: %y", conn.getConnectionEvents())
+            : "no thread fails");
+        list<int> counts = map received.get(), xrange(received.size());
+        assertEq(Threads * Iterations, counts.size());
+        assertEq((), (select counts, $1 != 3), "each receiver gets the messages sent to it");
+        # the links are closed on the event thread after the close calls: a call that waits for the event thread
+        # runs after them
+        conn.closeSender(conn.createSender(sprintf("threads-test-%d-sync", getpid())));
+        assertEq(links, conn.getStatistics().link_count, "all links are closed");
+    }
+}
