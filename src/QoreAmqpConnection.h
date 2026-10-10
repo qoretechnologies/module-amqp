@@ -60,6 +60,9 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <chrono>
+#include <functional>
+#include <type_traits>
 #include <map>
 #include <queue>
 #include <set>
@@ -173,6 +176,20 @@ public:
     //! Set whether links should be automatically recovered on reconnect
     DLLLOCAL void setAutoRecoverLinks(bool recover);
 
+#ifdef DEBUG
+    //! Debug builds: blocks the Proton event thread until debugReleaseEventThread() is called
+    /** Work scheduled while the event thread is held stays pending, so that tests can cancel a thread waiting for
+        work that has not run yet; returns when the event thread is held
+    */
+    DLLLOCAL void debugHoldEventThread(ExceptionSink* xsink);
+
+    //! Debug builds: waits until the given number of work items have been scheduled since the event thread was held
+    DLLLOCAL void debugWaitPendingWork(int64 count, ExceptionSink* xsink);
+
+    //! Debug builds: releases the Proton event thread held by debugHoldEventThread()
+    DLLLOCAL void debugReleaseEventThread();
+#endif
+
 private:
     //! The messaging handler that receives proton events
     class Handler : public proton::messaging_handler {
@@ -208,49 +225,169 @@ private:
     */
     DLLLOCAL bool checkNetworkAccess(ExceptionSink* xsink) const;
 
-    //! Wait on a condition variable with cooperative cancellation
-    /** Polls every QORE_IO_POLL_INTERVAL_MS, checking qore_check_cancel().
-        @param mtx the mutex (must be locked by caller via unique_lock)
-        @param cv the condition variable
-        @param pred predicate that returns true when done
-        @param timeout_ms maximum wait time (-1 for no timeout)
+    //! Waits on a condition with cooperative cancellation
+    /** With %Qore 3.0 and later, the wait ends as soon as the thread is cancelled or its Program is interrupted;
+        with an older %Qore library, cancellation is checked every QORE_IO_POLL_INTERVAL_MS
+
+        @param lock the lock of the condition, locked by the caller; it is locked when the call returns
+        @param cv the condition, broadcast under the lock whenever the predicate can change
+        @param pred returns true when the wait is over
+        @param timeout_ms maximum wait time in milliseconds (-1 for no timeout)
         @param operation description for cancellation messages
         @param xsink exception sink
-        @return true if pred became true, false on timeout or cancellation
+
+        @return true if pred became true, false on timeout (no exception) or cancellation (exception raised)
     */
     template <typename Pred>
-    DLLLOCAL bool waitWithCancel(std::unique_lock<std::mutex>& lock,
-            std::condition_variable& cv, Pred pred, int timeout_ms,
-            const char* operation, ExceptionSink* xsink) {
-        auto deadline = timeout_ms >= 0
-            ? std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms)
-            : std::chrono::steady_clock::time_point::max();
-
+    DLLLOCAL bool waitWithCancel(std::unique_lock<std::mutex>& lock, QoreCondition& cv, Pred pred,
+            int64 timeout_ms, const char* operation, ExceptionSink* xsink) {
+        // a QoreCondition waits on the pthread mutex of the lock
+        static_assert(std::is_same<std::mutex::native_handle_type, pthread_mutex_t*>::value,
+            "std::mutex must wrap a pthread mutex");
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms >= 0 ? timeout_ms : 0);
         while (!pred()) {
-            auto wait_until = std::min(deadline,
-                std::chrono::steady_clock::now()
-                    + std::chrono::milliseconds(QORE_IO_POLL_INTERVAL_MS));
-
-            cv.wait_until(lock, wait_until);
-
+            int64 wait_ms = -1;
+            if (timeout_ms >= 0) {
+                int64 remaining = std::chrono::duration_cast<std::chrono::microseconds>(
+                    deadline - std::chrono::steady_clock::now()).count();
+                if (remaining <= 0) {
+                    return false;
+                }
+                // rounded up, so that the wait does not end before the deadline
+                wait_ms = (remaining + 999) / 1000;
+            }
+#ifdef _QORE_HAS_CANCELLABLE_POLL
+            if (cv.waitWithInterrupt(lock.mutex()->native_handle(), wait_ms, xsink)
+                    == QORE_COND_RESULT_INTERRUPTED) {
+                return false;
+            }
+#else
+            if (wait_ms < 0 || wait_ms > QORE_IO_POLL_INTERVAL_MS) {
+                wait_ms = QORE_IO_POLL_INTERVAL_MS;
+            }
+            cv.wait2(lock.mutex()->native_handle(), wait_ms);
             if (pred()) {
                 return true;
             }
-
-            // Check timeout
-            if (timeout_ms >= 0 && std::chrono::steady_clock::now() >= deadline) {
-                return false;
-            }
-
-            // Check cooperative cancellation (unlock to avoid holding lock during xsink ops)
+            // the exception is raised without the lock
             lock.unlock();
-            if (qore_check_cancel(xsink, operation)) {
-                lock.lock();
+            bool cancelled = qore_check_cancel(xsink, operation);
+            lock.lock();
+            if (cancelled) {
                 return false;
             }
-            lock.lock();
+#endif
         }
         return true;
+    }
+
+    //! The state of work that runs on the Proton event thread, shared by the work and the thread waiting for it
+    /** The work keeps the state, so it never references the stack of a thread whose wait ended early
+        (cancellation, a Program interrupt, or a timeout)
+    */
+    struct WorkState {
+        std::mutex m;
+        QoreCondition cond;
+        //! set when the work has run, or was skipped because the waiting thread gave up before it ran
+        bool done = false;
+        //! set when the waiting thread has given up
+        bool abandoned = false;
+        //! an error raised by the work
+        std::string error;
+        //! set by the work to release what it created if the waiting thread gives up; called on the event thread
+        std::function<void()> release;
+    };
+
+    //! Runs work on the Proton event thread and waits until it has run
+    /** @param state the state of the work, derived from WorkState
+        @param fn the work, called with the state on the event thread unless the waiting thread has given up before;
+        it must not reference the stack of the waiting thread
+        @param timeout_ms maximum wait time in milliseconds (-1 for no timeout)
+        @param operation description for cancellation messages
+        @param xsink exception sink
+
+        @return true if the work has run; false if an exception was raised (the work could not be scheduled, or the
+        thread was cancelled or its Program interrupted) or the timeout expired (no exception); if the work runs
+        after the wait was given up, what it created is released with WorkState::release
+    */
+    template <typename S, typename F>
+    DLLLOCAL bool runWork(const std::shared_ptr<S>& state, F fn, int64 timeout_ms, const char* operation,
+            ExceptionSink* xsink) {
+        // ends the wait with an error if the work is discarded without running (when the connection is closed)
+        struct DiscardGuard {
+            std::shared_ptr<S> state;
+            bool ran = false;
+
+            ~DiscardGuard() {
+                if (ran) {
+                    return;
+                }
+                std::lock_guard<std::mutex> lock(state->m);
+                if (!state->done) {
+                    state->done = true;
+                    state->error = "the connection was closed before the operation ran";
+                    state->cond.broadcast();
+                }
+            }
+        };
+        std::shared_ptr<DiscardGuard> guard = std::make_shared<DiscardGuard>();
+        guard->state = state;
+        if (!scheduleWork([guard, fn]() mutable {
+            guard->ran = true;
+            S& st = *guard->state;
+            {
+                std::lock_guard<std::mutex> lock(st.m);
+                if (st.abandoned) {
+                    // the waiting thread gave up before the work ran
+                    st.done = true;
+                    return;
+                }
+            }
+            try {
+                fn(st);
+            } catch (const std::exception& e) {
+                st.error = e.what();
+            }
+            bool abandoned;
+            {
+                std::lock_guard<std::mutex> lock(st.m);
+                st.done = true;
+                abandoned = st.abandoned;
+                st.cond.broadcast();
+            }
+            if (abandoned && st.release) {
+                st.release();
+            }
+        }, xsink)) {
+            return false;
+        }
+
+        std::unique_lock<std::mutex> lock(state->m);
+        if (waitWithCancel(lock, state->cond, [&state]() { return state->done; }, timeout_ms, operation, xsink)) {
+            return true;
+        }
+        // the wait was given up: what the work creates is released by the work, or here if it has already run
+        state->abandoned = true;
+        if (!state->done || !state->release) {
+            return false;
+        }
+        lock.unlock();
+        scheduleRelease(state);
+        return false;
+    }
+
+    //! Releases what work created, on the Proton event thread, when the thread that waited for it gives up later
+    template <typename S>
+    DLLLOCAL void scheduleRelease(const std::shared_ptr<S>& state) {
+        if (!state->release) {
+            return;
+        }
+        std::shared_ptr<S> s = state;
+        ExceptionSink release_xsink;
+        if (!scheduleWork([s]() { s->release(); }, &release_xsink)) {
+            // the connection is closed, and its links with it
+            release_xsink.clear();
+        }
     }
 
     //! Safely schedule work on the proton work queue; returns false and raises
@@ -264,14 +401,34 @@ private:
             return false;
         }
         try {
-            work_queue_->add(std::forward<F>(fn));
+            if (!work_queue_->add(std::forward<F>(fn))) {
+                xsink->raiseException("AMQP-CONNECTION-ERROR",
+                    "connection is closed; cannot schedule work");
+                return false;
+            }
         } catch (const std::exception& e) {
             xsink->raiseException("AMQP-CONNECTION-ERROR",
                 "failed to schedule work: %s", e.what());
             return false;
         }
+#ifdef DEBUG
+        {
+            std::lock_guard<std::mutex> lock(debug_mutex_);
+            if (debug_holding_) {
+                ++debug_pending_;
+                debug_cv_.notify_all();
+            }
+        }
+#endif
         return true;
     }
+
+    //! Closes a sender created by work whose waiting thread gave up; called on the Proton event thread
+    DLLLOCAL void releaseSender(proton::sender& s, const std::string& name, const std::string& addr);
+
+    //! Closes a receiver created by work whose waiting thread gave up; called on the Proton event thread
+    DLLLOCAL void releaseReceiver(proton::receiver& r, const std::string& name, const std::string& addr,
+        bool durable);
 
     //! Send an AMQP management request and receive a response
     DLLLOCAL QoreHashNode* managementRequest(const std::string& operation,
@@ -313,7 +470,7 @@ private:
 
     // Synchronization for connection establishment
     std::mutex connect_mutex_;
-    std::condition_variable connect_cv_;
+    QoreCondition connect_cv_;
     std::string connect_error_;
 
     // Sender/receiver maps
@@ -330,12 +487,12 @@ private:
     // is attached at the broker, so any message that arrives before then has
     // no queue to route to.
     std::mutex attach_mutex_;
-    std::condition_variable attach_cv_;
+    QoreCondition attach_cv_;
     std::set<std::string> attached_receivers_;
 
     // Received messages queue per receiver
     std::mutex recv_mutex_;
-    std::condition_variable recv_cv_;
+    QoreCondition recv_cv_;
     std::map<std::string, std::queue<ReceivedMessage>> received_messages_;
 
     // Delivery tracking for accept/reject/release/modify
@@ -344,7 +501,7 @@ private:
 
     // Send tracking
     std::mutex send_mutex_;
-    std::condition_variable send_cv_;
+    QoreCondition send_cv_;
     struct SendResult {
         bool done = false;
         bool accepted = false;
@@ -393,7 +550,7 @@ private:
 
     // Transaction state
     std::mutex txn_mutex_;
-    std::condition_variable txn_cv_;
+    QoreCondition txn_cv_;
     std::atomic<bool> txn_active_{false};
     pn_link_t* txn_coordinator_link_ = nullptr;  // C-level coordinator sender
     proton::binary txn_id_;
@@ -421,6 +578,18 @@ private:
 
     //! Generate a unique link name
     DLLLOCAL std::string generateLinkName(const char* prefix);
+
+#ifdef DEBUG
+    // Debug builds: holding the Proton event thread (see debugHoldEventThread())
+    std::mutex debug_mutex_;
+    std::condition_variable debug_cv_;
+    //! the event thread is held
+    bool debug_holding_ = false;
+    //! the event thread is to be released
+    bool debug_release_ = false;
+    //! the number of work items scheduled while the event thread is held
+    int64 debug_pending_ = 0;
+#endif
 
     //! Get the delivery tag as a hex string key for the delivery map
     DLLLOCAL static std::string deliveryTagKey(const proton::delivery& d);

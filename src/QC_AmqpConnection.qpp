@@ -282,6 +282,9 @@ conn.send(sender, new AmqpMessage("transacted message"));
 conn.commitTransaction();
     @endcode
 
+    @note A call that waits (for the broker, a message, or the connection's event thread) ends as soon as the thread
+    is cancelled (\c THREAD-CANCELLED) or its \c Program is interrupted (\c PROGRAM-INTERRUPTED); a link that the
+    call was creating is closed, as the call does not return it
 */
 qclass AmqpConnection [arg=QoreAmqpConnection* conn; ns=Qore::Amqp; dom=NETWORK];
 
@@ -459,17 +462,18 @@ list<hash<AmqpDeliveryInfo>> AmqpConnection::sendBatch(string sender, list<AmqpM
 }
 
 //! Receives a message from the named receiver
-/** Blocks until a message is available or the timeout expires.
-    Uses cooperative cancellation (polls every 500ms with qore_check_cancel()).
+/** Blocks until a message is available or the timeout expires; the wait ends as soon as the thread is cancelled
+    or its \c Program is interrupted.
 
     @param receiver the receiver link name (returned by createReceiver())
-    @param timeout the maximum time to wait for a message
+    @param timeout the maximum time to wait for a message; zero or a negative value does not wait
 
     @return the received message, or NOTHING if the timeout expired
 
-    @throw AMQP-CONNECTION-ERROR if the connection is not open
+    @throw AMQP-CONNECTION-ERROR if the connection is not open, or is lost while waiting
     @throw AMQP-RECEIVE-ERROR if the receive operation fails
     @throw THREAD-CANCELLED if the thread is cancelled during receive
+    @throw PROGRAM-INTERRUPTED if the \c Program is interrupted during receive
 
     @par Example:
     @code{.py}

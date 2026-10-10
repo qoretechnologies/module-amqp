@@ -1,0 +1,210 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+/*  amqp-cancel.qtest
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A thread waiting for an AMQP operation ends the wait as soon as it is cancelled or its Program is interrupted
+    (requires a broker via AMQP_TEST_URL); work that an operation left pending on the Proton event thread neither
+    references the stack of the thread nor leaves anything behind (requires a debug build of the module, which can
+    hold the event thread)
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+
+%requires QUnit
+%requires amqp
+
+%exec-class AmqpCancelTest
+
+public class AmqpCancelTest inherits QUnit::Test {
+    private {
+        *string url;
+
+        #! the longest time in microseconds that a cancelled wait may take to end
+        const MaxCancelUs = 2000000;
+        #! the timeout of the waits, much longer than MaxCancelUs
+        const WaitTimeout = 30s;
+    }
+
+    constructor() : Test("AmqpCancelTest", "1.0", \ARGV) {
+        url = ENV.AMQP_TEST_URL;
+        addTestCase("a cancelled thread ends a receive", \cancelReceive());
+        addTestCase("an interrupted Program ends a receive", \interruptReceive());
+        addTestCase("a cancelled thread ends a wait for pending work", \cancelPendingWork());
+        set_return_value(main());
+    }
+
+    #! returns a connected connection
+    private AmqpConnection getConnection() {
+        if (!url) {
+            testSkip("AMQP_TEST_URL not set");
+        }
+        AmqpConnection conn(<AmqpConnectionOptions>{"url": url});
+        conn.connect();
+        return conn;
+    }
+
+    #! returns a unique address for a test
+    private string getAddress(string name) {
+        return sprintf("cancel-test-%s-%d-%d", name, getpid(), clock_get_monotonic_us());
+    }
+
+    cancelReceive() {
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+        string receiver = conn.createReceiver(getAddress("receive"));
+        Queue started();
+        Queue done();
+        int tid = background sub () {
+            hash<auto> rv;
+            try {
+                started.push(True);
+                conn.receive(receiver, WaitTimeout);
+                rv.err = "NONE";
+            } catch (hash<ExceptionInfo> ex) {
+                rv.err = ex.err;
+                rv.desc = ex.desc;
+            }
+            rv.end = clock_get_monotonic_us();
+            done.push(rv);
+        }();
+        started.get();
+        int start = clock_get_monotonic_us();
+        cancel_thread(tid, "amqp cancel test");
+        hash<auto> rv = done.get();
+        assertEq("THREAD-CANCELLED", rv.err, rv.desc);
+        assertLt(MaxCancelUs, rv.end - start, "the cancellation ends the wait at once");
+    }
+
+    interruptReceive() {
+        if (!url) {
+            testSkip("AMQP_TEST_URL not set");
+        }
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.loadModule("amqp");
+        p.parse("sub run(string url, string address, Queue started, int timeout_ms) { "
+            "AmqpConnection conn(<AmqpConnectionOptions>{\"url\": url}); conn.connect(); "
+            "string receiver = conn.createReceiver(address); started.push(True); "
+            "on_exit conn.close(); conn.receive(receiver, timeout_ms); }", "amqp-interrupt");
+        Queue started();
+        Queue done();
+        background sub () {
+            hash<auto> rv;
+            try {
+                p.callFunction("run", url, getAddress("interrupt"), started, WaitTimeout.durationMilliseconds());
+                rv.err = "NONE";
+            } catch (hash<ExceptionInfo> ex) {
+                rv.err = ex.err;
+                rv.desc = ex.desc;
+                # the wait was not reached if the call failed before it
+                started.push(False);
+            }
+            rv.end = clock_get_monotonic_us();
+            done.push(rv);
+        }();
+        assertTrue(started.get(), "the sandboxed Program reaches the receive");
+        int start = clock_get_monotonic_us();
+        sm.requestInterrupt();
+        hash<auto> rv = done.get();
+        assertEq("PROGRAM-INTERRUPTED", rv.err, rv.desc);
+        assertLt(MaxCancelUs, rv.end - start, "the interrupt ends the wait at once");
+    }
+
+    cancelPendingWork() {
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+        if (!conn.hasCallableMethod("debugHoldEventThread")) {
+            testSkip("holding the event thread requires a debug build of the module");
+        }
+
+        string sender = conn.createSender(getAddress("send"));
+        int links = conn.getStatistics().link_count;
+
+        hash<string, code> ops = {
+            "createSender": sub () { conn.createSender(getAddress("sender")); },
+            "createReceiver": sub () { conn.createReceiver(getAddress("receiver")); },
+            "createDurableReceiver": sub () {
+                conn.createDurableReceiver(getAddress("durable"), getAddress("subscription"));
+            },
+            "unsubscribeDurable": sub () { conn.unsubscribeDurable(getAddress("unsubscribe")); },
+            "send": sub () { conn.send(sender, new AmqpMessage("a")); },
+            "sendBatch": sub () { conn.sendBatch(sender, (new AmqpMessage("a"), new AmqpMessage("b"))); },
+        };
+        foreach hash<auto> i in (ops.pairIterator()) {
+            hash<auto> rv = cancelPending(conn, i.value);
+            assertEq("THREAD-CANCELLED", rv.err, i.key + ": " + rv.desc);
+            assertLt(MaxCancelUs, rv.us, i.key + " ends at once");
+
+            # the work queued after the pending work runs after it
+            conn.closeSender(conn.createSender(getAddress("sync")));
+            assertEq(links, conn.getStatistics().link_count, i.key + " leaves no link behind");
+        }
+    }
+
+    #! runs the operation in a thread while the event thread is held, and cancels the thread when its work is pending
+    /** @return the exception of the operation (\c err, \c desc) and the time in microseconds that it took to end
+        after the cancellation (\c us); an operation that did not end within MaxCancelUs ends only when the event
+        thread is released, after that time
+    */
+    private hash<auto> cancelPending(AmqpConnection conn, code op) {
+        Queue done();
+        call_object_method(conn, "debugHoldEventThread");
+        bool held = True;
+        on_exit if (held) {
+            call_object_method(conn, "debugReleaseEventThread");
+        }
+        int tid = background sub () {
+            hash<auto> rv;
+            try {
+                op();
+                rv.err = "NONE";
+            } catch (hash<ExceptionInfo> ex) {
+                rv.err = ex.err;
+                rv.desc = ex.desc;
+            }
+            rv.end = clock_get_monotonic_us();
+            done.push(rv);
+        }();
+        # the operation's work is queued behind the held event thread
+        call_object_method(conn, "debugWaitPendingWork", 1);
+        int start = clock_get_monotonic_us();
+        cancel_thread(tid, "amqp cancel test");
+        *hash<auto> rv;
+        try {
+            rv = done.get(MaxCancelUs / 1000);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "QUEUE-TIMEOUT") {
+                rethrow;
+            }
+        }
+        # the pending work runs now
+        call_object_method(conn, "debugReleaseEventThread");
+        held = False;
+        rv = rv ?? done.get();
+        rv.us = rv.end - start;
+        return rv;
+    }
+}

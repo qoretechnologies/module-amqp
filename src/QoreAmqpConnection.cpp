@@ -326,7 +326,7 @@ void QoreAmqpConnection::Handler::on_connection_open(proton::connection& c) {
 
     std::lock_guard<std::mutex> lock(conn_.connect_mutex_);
     conn_.connect_error_.clear();
-    conn_.connect_cv_.notify_all();
+    conn_.connect_cv_.broadcast();
 }
 
 void QoreAmqpConnection::Handler::on_connection_close(proton::connection& c) {
@@ -341,17 +341,17 @@ void QoreAmqpConnection::Handler::on_connection_close(proton::connection& c) {
     // Wake up any waiting receivers
     {
         std::lock_guard<std::mutex> lock(conn_.recv_mutex_);
-        conn_.recv_cv_.notify_all();
+        conn_.recv_cv_.broadcast();
     }
     // Wake up any waiting senders
     {
         std::lock_guard<std::mutex> lock(conn_.send_mutex_);
-        conn_.send_cv_.notify_all();
+        conn_.send_cv_.broadcast();
     }
     // Wake up connect waiters
     {
         std::lock_guard<std::mutex> lock(conn_.connect_mutex_);
-        conn_.connect_cv_.notify_all();
+        conn_.connect_cv_.broadcast();
     }
 }
 
@@ -363,16 +363,16 @@ void QoreAmqpConnection::Handler::on_connection_error(proton::connection& c) {
     {
         std::lock_guard<std::mutex> lock(conn_.connect_mutex_);
         conn_.connect_error_ = err;
-        conn_.connect_cv_.notify_all();
+        conn_.connect_cv_.broadcast();
     }
     // Wake up waiters
     {
         std::lock_guard<std::mutex> lock(conn_.recv_mutex_);
-        conn_.recv_cv_.notify_all();
+        conn_.recv_cv_.broadcast();
     }
     {
         std::lock_guard<std::mutex> lock(conn_.send_mutex_);
-        conn_.send_cv_.notify_all();
+        conn_.send_cv_.broadcast();
     }
 }
 
@@ -398,7 +398,7 @@ void QoreAmqpConnection::Handler::on_receiver_open(proton::receiver& r) {
         std::lock_guard<std::mutex> lock(conn_.attach_mutex_);
         conn_.attached_receivers_.insert(r.name());
     }
-    conn_.attach_cv_.notify_all();
+    conn_.attach_cv_.broadcast();
 }
 
 void QoreAmqpConnection::Handler::on_sender_close(proton::sender& s) {
@@ -408,7 +408,7 @@ void QoreAmqpConnection::Handler::on_sender_close(proton::sender& s) {
         std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
         conn_.txn_error_ = "coordinator closed by broker: " + err;
         conn_.txn_coordinator_ready_ = true;  // unblock the wait
-        conn_.txn_cv_.notify_all();
+        conn_.txn_cv_.broadcast();
     }
 }
 
@@ -419,7 +419,7 @@ void QoreAmqpConnection::Handler::on_sender_error(proton::sender& s) {
         std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
         conn_.txn_error_ = "coordinator error: " + err;
         conn_.txn_coordinator_ready_ = true;
-        conn_.txn_cv_.notify_all();
+        conn_.txn_cv_.broadcast();
     }
 }
 
@@ -429,7 +429,7 @@ void QoreAmqpConnection::Handler::on_sendable(proton::sender& s) {
     if (link == conn_.txn_coordinator_link_) {
         std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
         conn_.txn_coordinator_ready_ = true;
-        conn_.txn_cv_.notify_all();
+        conn_.txn_cv_.broadcast();
     }
 }
 
@@ -440,7 +440,7 @@ void QoreAmqpConnection::Handler::on_message(proton::delivery& d, proton::messag
     {
         std::lock_guard<std::mutex> lock(conn_.recv_mutex_);
         conn_.received_messages_[receiver_name].push(ReceivedMessage{m, d});
-        conn_.recv_cv_.notify_all();
+        conn_.recv_cv_.broadcast();
     }
 
     // Store delivery for later disposition
@@ -466,7 +466,7 @@ void QoreAmqpConnection::Handler::on_tracker_accept(proton::tracker& t) {
             it->second.accepted = true;
             ++conn_.messages_sent_;
         }
-        conn_.send_cv_.notify_all();
+        conn_.send_cv_.broadcast();
     }
 }
 
@@ -485,7 +485,7 @@ void QoreAmqpConnection::Handler::on_tracker_reject(proton::tracker& t) {
             it->second.accepted = false;
             it->second.error = "message rejected by broker";
         }
-        conn_.send_cv_.notify_all();
+        conn_.send_cv_.broadcast();
     }
 }
 
@@ -515,7 +515,7 @@ void QoreAmqpConnection::Handler::on_tracker_settle(proton::tracker& t) {
                             std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
                             conn_.txn_id_.assign(bytes.start, bytes.start + bytes.size);
                             conn_.txn_declare_done_ = true;
-                            conn_.txn_cv_.notify_all();
+                            conn_.txn_cv_.broadcast();
                             extracted = true;
                             break;
                         }
@@ -532,7 +532,7 @@ void QoreAmqpConnection::Handler::on_tracker_settle(proton::tracker& t) {
                     std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
                     conn_.txn_id_.assign(tag.start, tag.start + tag.size);
                     conn_.txn_declare_done_ = true;
-                    conn_.txn_cv_.notify_all();
+                    conn_.txn_cv_.broadcast();
                     extracted = true;
                 }
             }
@@ -540,18 +540,18 @@ void QoreAmqpConnection::Handler::on_tracker_settle(proton::tracker& t) {
                 std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
                 conn_.txn_error_ = "failed to extract transaction ID from Declared response";
                 conn_.txn_declare_done_ = true;
-                conn_.txn_cv_.notify_all();
+                conn_.txn_cv_.broadcast();
             }
         } else if (state == PN_ACCEPTED) {
             // Discharge accepted (commit/rollback succeeded)
             std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
             conn_.txn_discharge_done_ = true;
-            conn_.txn_cv_.notify_all();
+            conn_.txn_cv_.broadcast();
         } else if (state == PN_REJECTED) {
             std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
             conn_.txn_error_ = "transaction discharge rejected by broker";
             conn_.txn_discharge_done_ = true;
-            conn_.txn_cv_.notify_all();
+            conn_.txn_cv_.broadcast();
         } else {
             std::lock_guard<std::mutex> lock(conn_.txn_mutex_);
             std::ostringstream oss;
@@ -560,7 +560,7 @@ void QoreAmqpConnection::Handler::on_tracker_settle(proton::tracker& t) {
             conn_.txn_error_ = oss.str();
             conn_.txn_declare_done_ = true;
             conn_.txn_discharge_done_ = true;
-            conn_.txn_cv_.notify_all();
+            conn_.txn_cv_.broadcast();
         }
         return;
     }
@@ -576,15 +576,15 @@ void QoreAmqpConnection::Handler::on_transport_error(proton::transport& t) {
         if (conn_.connect_error_.empty()) {
             conn_.connect_error_ = err;
         }
-        conn_.connect_cv_.notify_all();
+        conn_.connect_cv_.broadcast();
     }
     {
         std::lock_guard<std::mutex> lock(conn_.recv_mutex_);
-        conn_.recv_cv_.notify_all();
+        conn_.recv_cv_.broadcast();
     }
     {
         std::lock_guard<std::mutex> lock(conn_.send_mutex_);
-        conn_.send_cv_.notify_all();
+        conn_.send_cv_.broadcast();
     }
 }
 
@@ -598,7 +598,7 @@ void QoreAmqpConnection::Handler::on_error(const proton::error_condition& ec) {
         if (conn_.connect_error_.empty()) {
             conn_.connect_error_ = err;
         }
-        conn_.connect_cv_.notify_all();
+        conn_.connect_cv_.broadcast();
     }
 }
 
@@ -748,6 +748,9 @@ QoreAmqpConnection::QoreAmqpConnection(const QoreHashNode* options, ExceptionSin
 QoreAmqpConnection::~QoreAmqpConnection() {
     // Ensure the container thread is stopped
     closing_ = true;
+#ifdef DEBUG
+    debugReleaseEventThread();
+#endif
     {
         std::lock_guard<std::mutex> lock(wq_mutex_);
         if (connected_ && work_queue_) {
@@ -824,7 +827,7 @@ void QoreAmqpConnection::connect(ExceptionSink* xsink) {
                 connect_error_ = e.what();
             }
             connected_ = false;
-            connect_cv_.notify_all();
+            connect_cv_.broadcast();
         }
     });
 
@@ -882,6 +885,10 @@ void QoreAmqpConnection::close(ExceptionSink* xsink) {
     }
 
     closing_ = true;
+#ifdef DEBUG
+    // the event thread must not be held when it has to close the connection
+    debugReleaseEventThread();
+#endif
 
     {
         std::lock_guard<std::mutex> lock(wq_mutex_);
@@ -975,45 +982,34 @@ QoreStringNode* QoreAmqpConnection::createSender(const char* address, const Qore
         return nullptr;
     }
 
-    std::string name = generateLinkName("sender");
     std::string addr(address);
 
-    std::mutex mtx;
-    std::condition_variable cv;
-    bool done = false;
-    std::string error;
+    // the work does not reference this stack frame: the thread can give up waiting before it runs
+    struct CreateSenderState : public WorkState {
+        std::string name;
+    };
+    std::shared_ptr<CreateSenderState> state = std::make_shared<CreateSenderState>();
+    if (!runWork(state, [this, addr](CreateSenderState& st) {
+        proton::sender_options so;
+        proton::target_options to;
+        to.address(addr);
+        so.target(to);
 
-    if (!scheduleWork([&, this]() {
-        try {
-            proton::sender_options so;
-            proton::target_options to;
-            to.address(addr);
-            so.target(to);
-
-            proton::sender s = connection_.open_sender(addr, so);
-            name = s.name();
-            {
-                std::lock_guard<std::mutex> lock(links_mutex_);
-                senders_[name] = s;
-            }
-            // Register for reconnect recovery
-            {
-                std::lock_guard<std::mutex> lock(registry_mutex_);
-                link_registry_.push_back(LinkInfo{addr, true, false, ""});
-            }
-        } catch (const std::exception& e) {
-            error = e.what();
+        proton::sender s = connection_.open_sender(addr, so);
+        st.name = s.name();
+        {
+            std::lock_guard<std::mutex> lock(links_mutex_);
+            senders_[st.name] = s;
         }
-        std::lock_guard<std::mutex> lock(mtx);
-        done = true;
-        cv.notify_all();
-    }, xsink)) {
-        return nullptr;
-    }
-
-    std::unique_lock<std::mutex> lock(mtx);
-    if (!waitWithCancel(lock, cv, [&done]() { return done; },
-            30000, "AmqpConnection::createSender", xsink)) {
+        // Register for reconnect recovery
+        {
+            std::lock_guard<std::mutex> lock(registry_mutex_);
+            link_registry_.push_back(LinkInfo{addr, true, false, ""});
+        }
+        st.release = [this, s, name = st.name, addr]() mutable {
+            releaseSender(s, name, addr);
+        };
+    }, 30000, "AmqpConnection::createSender", xsink)) {
         if (!*xsink) {
             xsink->raiseException("AMQP-SENDER-ERROR",
                 "timed out creating sender for '%s'", address);
@@ -1021,13 +1017,13 @@ QoreStringNode* QoreAmqpConnection::createSender(const char* address, const Qore
         return nullptr;
     }
 
-    if (!error.empty()) {
+    if (!state->error.empty()) {
         xsink->raiseException("AMQP-SENDER-ERROR", "failed to create sender for '%s': %s",
-            address, error.c_str());
+            address, state->error.c_str());
         return nullptr;
     }
 
-    return new QoreStringNode(name);
+    return new QoreStringNode(state->name);
 }
 
 QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const QoreHashNode* opts,
@@ -1081,80 +1077,71 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
         }
     }
 
-    std::mutex mtx;
-    std::condition_variable cv;
-    bool done = false;
-    std::string error;
+    // the work does not reference this stack frame: the thread can give up waiting before it runs
+    struct CreateReceiverState : public WorkState {
+        std::string name;
+    };
+    std::shared_ptr<CreateReceiverState> state = std::make_shared<CreateReceiverState>();
+    if (!runWork(state, [this, addr, shared, global, selector, credit, prefetch, auto_accept]
+            (CreateReceiverState& st) {
+        proton::receiver_options ro;
+        proton::source_options so;
+        so.address(addr);
 
-    if (!scheduleWork([&, this, shared, global]() {
-        try {
-            proton::receiver_options ro;
-            proton::source_options so;
-            so.address(addr);
-
-            // Apply shared subscription capabilities
-            if (shared || global) {
-                std::vector<proton::symbol> caps;
-                if (shared) {
-                    caps.push_back(proton::symbol("shared"));
-                }
-                if (global) {
-                    caps.push_back(proton::symbol("global"));
-                }
-                so.capabilities(caps);
+        // Apply shared subscription capabilities
+        if (shared || global) {
+            std::vector<proton::symbol> caps;
+            if (shared) {
+                caps.push_back(proton::symbol("shared"));
             }
-
-            // Apply JMS selector filter if provided
-            if (!selector.empty()) {
-                proton::source::filter_map fm;
-                proton::symbol filter_key("selector");
-                // JMS selector filter descriptor: apache.org:selector-filter:string
-                proton::value filter_value;
-                proton::codec::encoder enc(filter_value);
-                // Encode as described type with descriptor 0x0000468C00000004
-                enc << proton::codec::start::described()
-                    << proton::symbol("apache.org:selector-filter:string")
-                    << selector
-                    << proton::codec::finish();
-                fm.put(filter_key, filter_value);
-                so.filters(fm);
+            if (global) {
+                caps.push_back(proton::symbol("global"));
             }
-
-            if (credit > 0) {
-                ro.credit_window(credit);
-            } else if (prefetch > 0) {
-                ro.credit_window(prefetch);
-            }
-            // Default auto_accept to false so manual disposition works;
-            // proton defaults to true which prevents accept/reject/release
-            ro.auto_accept(auto_accept);
-
-            ro.source(so);
-
-            proton::receiver r = connection_.open_receiver(addr, ro);
-            name = r.name();
-            {
-                std::lock_guard<std::mutex> lock(links_mutex_);
-                receivers_[name] = r;
-            }
-            // Register for reconnect recovery
-            {
-                std::lock_guard<std::mutex> lock(registry_mutex_);
-                link_registry_.push_back(LinkInfo{addr, false, false, ""});
-            }
-        } catch (const std::exception& e) {
-            error = e.what();
+            so.capabilities(caps);
         }
-        std::lock_guard<std::mutex> lock(mtx);
-        done = true;
-        cv.notify_all();
-    }, xsink)) {
-        return nullptr;
-    }
 
-    std::unique_lock<std::mutex> lock(mtx);
-    if (!waitWithCancel(lock, cv, [&done]() { return done; },
-            30000, "AmqpConnection::createReceiver", xsink)) {
+        // Apply JMS selector filter if provided
+        if (!selector.empty()) {
+            proton::source::filter_map fm;
+            proton::symbol filter_key("selector");
+            // JMS selector filter descriptor: apache.org:selector-filter:string
+            proton::value filter_value;
+            proton::codec::encoder enc(filter_value);
+            // Encode as described type with descriptor 0x0000468C00000004
+            enc << proton::codec::start::described()
+                << proton::symbol("apache.org:selector-filter:string")
+                << selector
+                << proton::codec::finish();
+            fm.put(filter_key, filter_value);
+            so.filters(fm);
+        }
+
+        if (credit > 0) {
+            ro.credit_window(credit);
+        } else if (prefetch > 0) {
+            ro.credit_window(prefetch);
+        }
+        // Default auto_accept to false so manual disposition works;
+        // proton defaults to true which prevents accept/reject/release
+        ro.auto_accept(auto_accept);
+
+        ro.source(so);
+
+        proton::receiver r = connection_.open_receiver(addr, ro);
+        st.name = r.name();
+        {
+            std::lock_guard<std::mutex> lock(links_mutex_);
+            receivers_[st.name] = r;
+        }
+        // Register for reconnect recovery
+        {
+            std::lock_guard<std::mutex> lock(registry_mutex_);
+            link_registry_.push_back(LinkInfo{addr, false, false, ""});
+        }
+        st.release = [this, r, name = st.name, addr]() mutable {
+            releaseReceiver(r, name, addr, false);
+        };
+    }, 30000, "AmqpConnection::createReceiver", xsink)) {
         if (!*xsink) {
             xsink->raiseException("AMQP-RECEIVER-ERROR",
                 "timed out creating receiver for '%s'", address);
@@ -1162,11 +1149,12 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
         return nullptr;
     }
 
-    if (!error.empty()) {
+    if (!state->error.empty()) {
         xsink->raiseException("AMQP-RECEIVER-ERROR", "failed to create receiver for '%s': %s",
-            address, error.c_str());
+            address, state->error.c_str());
         return nullptr;
     }
+    name = state->name;
 
     // Wait for the broker to confirm the link attach.  open_receiver() above
     // only schedules the ATTACH frame; with MULTICAST routing (Artemis
@@ -1178,6 +1166,9 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
         if (!waitWithCancel(lock, attach_cv_,
                 [&]() { return attached_receivers_.count(name) > 0; },
                 30000, "AmqpConnection::createReceiver", xsink)) {
+            lock.unlock();
+            // the receiver is not returned, so it is closed
+            scheduleRelease(state);
             if (!*xsink) {
                 xsink->raiseException("AMQP-RECEIVER-ERROR",
                     "timed out waiting for broker to attach receiver for '%s'",
@@ -1188,6 +1179,53 @@ QoreStringNode* QoreAmqpConnection::createReceiver(const char* address, const Qo
     }
 
     return new QoreStringNode(name);
+}
+
+void QoreAmqpConnection::releaseSender(proton::sender& s, const std::string& name, const std::string& addr) {
+    {
+        std::lock_guard<std::mutex> lock(links_mutex_);
+        senders_.erase(name);
+    }
+    // the registry entry added for this sender; one for each sender
+    {
+        std::lock_guard<std::mutex> lock(registry_mutex_);
+        for (auto it = link_registry_.rbegin(); it != link_registry_.rend(); ++it) {
+            if (it->is_sender && it->address == addr) {
+                link_registry_.erase(std::next(it).base());
+                break;
+            }
+        }
+    }
+    s.close();
+}
+
+void QoreAmqpConnection::releaseReceiver(proton::receiver& r, const std::string& name, const std::string& addr,
+        bool durable) {
+    {
+        std::lock_guard<std::mutex> lock(links_mutex_);
+        receivers_.erase(name);
+    }
+    {
+        std::lock_guard<std::mutex> lock(recv_mutex_);
+        received_messages_.erase(name);
+    }
+    {
+        std::lock_guard<std::mutex> lock(attach_mutex_);
+        attached_receivers_.erase(name);
+    }
+    // the registry entry added for this receiver; a durable receiver is registered with its subscription name
+    {
+        std::lock_guard<std::mutex> lock(registry_mutex_);
+        for (auto it = link_registry_.rbegin(); it != link_registry_.rend(); ++it) {
+            if (!it->is_sender && it->is_durable == durable && it->address == addr
+                    && (!durable || it->subscription_name == name)) {
+                link_registry_.erase(std::next(it).base());
+                break;
+            }
+        }
+    }
+    // a durable subscription is kept, as with closeDurableReceiver()
+    r.close();
 }
 
 void QoreAmqpConnection::closeSender(const char* sender_name, ExceptionSink* xsink) {
@@ -1314,13 +1352,6 @@ QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMe
     }
 
     // Send via work queue and wait for broker confirmation
-    std::string tag_key;
-    std::mutex mtx;
-    std::condition_variable cv;
-    bool send_done = false;
-    bool sent = false;
-    std::string error;
-
     // Capture transaction state for the lambda
     bool is_transacted = txn_active_.load();
     proton::binary send_txn_id;
@@ -1329,86 +1360,89 @@ QoreHashNode* QoreAmqpConnection::send(const char* sender_name, const QoreAmqpMe
         send_txn_id = txn_id_;
     }
 
-    if (!scheduleWork([&, this, is_transacted, send_txn_id]() {
-        try {
-            // Use Proton C API for full control over the delivery — this enables
-            // setting TransactionalState on the TRANSFER frame for transacted sends
-            pn_link_t* c_link = proton_unwrap<pn_link_t>(sender);
-            pn_message_t* c_msg = proton_unwrap<pn_message_t>(pmsg);
+    // the work does not reference this stack frame: the thread can give up waiting before it runs
+    struct SendState : public WorkState {
+        proton::sender sender;
+        proton::message msg;
+        std::string tag_key;
+    };
+    std::shared_ptr<SendState> state = std::make_shared<SendState>();
+    state->sender = sender;
+    state->msg = std::move(pmsg);
+    if (!runWork(state, [this, is_transacted, send_txn_id](SendState& st) {
+        // Use Proton C API for full control over the delivery — this enables
+        // setting TransactionalState on the TRANSFER frame for transacted sends
+        pn_link_t* c_link = proton_unwrap<pn_link_t>(st.sender);
+        pn_message_t* c_msg = proton_unwrap<pn_message_t>(st.msg);
 
-            // Generate a unique delivery tag
-            static std::atomic<int> send_tag_counter{0};
-            std::string dtag = "s-" + std::to_string(++send_tag_counter);
+        // Generate a unique delivery tag
+        static std::atomic<int> send_tag_counter{0};
+        std::string dtag = "s-" + std::to_string(++send_tag_counter);
 
-            // Create delivery with explicit tag
-            pn_delivery_t* dlv = pn_delivery(c_link,
-                pn_dtag(dtag.c_str(), dtag.size()));
+        // Create delivery with explicit tag
+        pn_delivery_t* dlv = pn_delivery(c_link,
+            pn_dtag(dtag.c_str(), dtag.size()));
 
-            // If transacted, set TransactionalState on the delivery BEFORE
-            // sending. The Proton transport includes delivery->local state in
-            // the TRANSFER frame when it's set before the link bytes are sent.
-            if (is_transacted && !send_txn_id.empty()) {
-                pn_delivery_update(dlv, 0x34);  // TransactionalState descriptor
-                pn_data_t* disp_data = pn_disposition_data(
-                    pn_delivery_local(dlv));
-                pn_data_clear(disp_data);
-                // TransactionalState fields: list(binary txn-id, *outcome)
-                pn_data_put_list(disp_data);
-                pn_data_enter(disp_data);
-                pn_data_put_binary(disp_data, pn_bytes(send_txn_id.size(),
-                    reinterpret_cast<const char*>(send_txn_id.data())));
-                pn_data_exit(disp_data);
-            }
-
-            // Encode message to buffer (using dynamic allocation variant)
-            pn_rwbytes_t buf = {0, nullptr};
-            ssize_t rc = pn_message_encode2(c_msg, &buf);
-            if (rc < 0) {
-                free(buf.start);
-                error = "failed to encode message: " +
-                    std::string(pn_error_text(pn_message_error(c_msg)));
-            } else {
-                // Send encoded bytes on the link (uses the current delivery)
-                pn_link_send(c_link, buf.start, rc);
-                pn_link_advance(c_link);
-                free(buf.start);
-
-                // Extract delivery tag for confirmation tracking
-                pn_delivery_tag_t ptag = pn_delivery_tag(dlv);
-                proton::binary tag(ptag.start, ptag.start + ptag.size);
-                std::ostringstream oss;
-                for (uint8_t b : tag) {
-                    oss << std::hex << std::setfill('0') << std::setw(2)
-                        << static_cast<int>(b);
-                }
-                tag_key = oss.str();
-                {
-                    std::lock_guard<std::mutex> lock(send_mutex_);
-                    send_results_[tag_key] = SendResult{false, false, "", tag};
-                }
-                bytes_sent_ += rc;
-                sent = true;
-            }
-        } catch (const std::exception& e) {
-            error = e.what();
+        // If transacted, set TransactionalState on the delivery BEFORE
+        // sending. The Proton transport includes delivery->local state in
+        // the TRANSFER frame when it's set before the link bytes are sent.
+        if (is_transacted && !send_txn_id.empty()) {
+            pn_delivery_update(dlv, 0x34);  // TransactionalState descriptor
+            pn_data_t* disp_data = pn_disposition_data(
+                pn_delivery_local(dlv));
+            pn_data_clear(disp_data);
+            // TransactionalState fields: list(binary txn-id, *outcome)
+            pn_data_put_list(disp_data);
+            pn_data_enter(disp_data);
+            pn_data_put_binary(disp_data, pn_bytes(send_txn_id.size(),
+                reinterpret_cast<const char*>(send_txn_id.data())));
+            pn_data_exit(disp_data);
         }
-        std::lock_guard<std::mutex> lock(mtx);
-        send_done = true;
-        cv.notify_all();
-    }, xsink)) {
+
+        // Encode message to buffer (using dynamic allocation variant)
+        pn_rwbytes_t buf = {0, nullptr};
+        ssize_t rc = pn_message_encode2(c_msg, &buf);
+        if (rc < 0) {
+            free(buf.start);
+            st.error = "failed to encode message: " +
+                std::string(pn_error_text(pn_message_error(c_msg)));
+        } else {
+            // Send encoded bytes on the link (uses the current delivery)
+            pn_link_send(c_link, buf.start, rc);
+            pn_link_advance(c_link);
+            free(buf.start);
+
+            // Extract delivery tag for confirmation tracking
+            pn_delivery_tag_t ptag = pn_delivery_tag(dlv);
+            proton::binary tag(ptag.start, ptag.start + ptag.size);
+            std::ostringstream oss;
+            for (uint8_t b : tag) {
+                oss << std::hex << std::setfill('0') << std::setw(2)
+                    << static_cast<int>(b);
+            }
+            st.tag_key = oss.str();
+            {
+                std::lock_guard<std::mutex> lock(send_mutex_);
+                send_results_[st.tag_key] = SendResult{false, false, "", tag};
+            }
+            bytes_sent_ += rc;
+            st.release = [this, tag_key = st.tag_key]() {
+                std::lock_guard<std::mutex> lock(send_mutex_);
+                send_results_.erase(tag_key);
+            };
+        }
+    }, 30000, "AmqpConnection::send", xsink)) {
+        if (!*xsink) {
+            xsink->raiseException("AMQP-SEND-ERROR", "timed out sending message");
+        }
         return nullptr;
     }
 
-    // Wait for the send to be scheduled
-    {
-        std::unique_lock<std::mutex> lock(mtx);
-        cv.wait(lock, [&send_done]() { return send_done; });
-    }
-
-    if (!error.empty()) {
-        xsink->raiseException("AMQP-SEND-ERROR", "failed to send message: %s", error.c_str());
+    if (!state->error.empty()) {
+        xsink->raiseException("AMQP-SEND-ERROR", "failed to send message: %s", state->error.c_str());
         return nullptr;
     }
+    std::string tag_key = state->tag_key;
 
     // For transacted sends, the broker confirms deliveries only at discharge
     // (commit/rollback), not individually. Skip the confirmation wait.
@@ -1550,82 +1584,96 @@ QoreListNode* QoreAmqpConnection::sendBatch(const char* sender_name,
         }
     }
 
-    // Send all in a single work queue lambda
-    std::vector<std::string> tag_keys(count);
-    std::mutex mtx;
-    std::condition_variable cv;
-    bool send_done = false;
-    std::string error;
+    // Send all in a single work queue lambda; the work does not reference this stack frame: the thread can give up
+    // waiting before it runs
+    struct SendBatchState : public WorkState {
+        proton::sender sender;
+        std::vector<proton::message> msgs;
+        std::vector<std::string> tag_keys;
+    };
+    std::shared_ptr<SendBatchState> state = std::make_shared<SendBatchState>();
+    state->sender = sender;
+    state->msgs = std::move(pmsgs);
+    state->tag_keys.resize(count);
+    if (!runWork(state, [this, is_transacted, send_txn_id](SendBatchState& st) {
+        pn_link_t* c_link = proton_unwrap<pn_link_t>(st.sender);
+        static std::atomic<int> batch_tag_counter{0};
 
-    if (!scheduleWork([&, this, is_transacted, send_txn_id]() {
-        try {
-            pn_link_t* c_link = proton_unwrap<pn_link_t>(sender);
-            static std::atomic<int> batch_tag_counter{0};
+        for (size_t i = 0; i < st.msgs.size(); ++i) {
+            int tag_num = ++batch_tag_counter;
+            std::string dtag = "b-" + std::to_string(tag_num);
 
-            for (size_t i = 0; i < count; ++i) {
-                int tag_num = ++batch_tag_counter;
-                std::string dtag = "b-" + std::to_string(tag_num);
+            pn_delivery_t* dlv = pn_delivery(c_link,
+                pn_dtag(dtag.c_str(), dtag.size()));
 
-                pn_delivery_t* dlv = pn_delivery(c_link,
-                    pn_dtag(dtag.c_str(), dtag.size()));
-
-                if (is_transacted && !send_txn_id.empty()) {
-                    pn_delivery_update(dlv, 0x34);
-                    pn_data_t* disp_data = pn_disposition_data(
-                        pn_delivery_local(dlv));
-                    pn_data_clear(disp_data);
-                    pn_data_put_list(disp_data);
-                    pn_data_enter(disp_data);
-                    pn_data_put_binary(disp_data, pn_bytes(send_txn_id.size(),
-                        reinterpret_cast<const char*>(send_txn_id.data())));
-                    pn_data_exit(disp_data);
-                }
-
-                pn_message_t* c_msg = proton_unwrap<pn_message_t>(pmsgs[i]);
-                pn_rwbytes_t buf = {0, nullptr};
-                ssize_t rc = pn_message_encode2(c_msg, &buf);
-                if (rc < 0) {
-                    free(buf.start);
-                    error = "failed to encode batch message " +
-                        std::to_string(i);
-                    break;
-                }
-                pn_link_send(c_link, buf.start, rc);
-                pn_link_advance(c_link);
-                free(buf.start);
-
-                pn_delivery_tag_t ptag = pn_delivery_tag(dlv);
-                proton::binary tag(ptag.start, ptag.start + ptag.size);
-                std::ostringstream oss;
-                for (uint8_t b : tag) {
-                    oss << std::hex << std::setfill('0') << std::setw(2)
-                        << static_cast<int>(b);
-                }
-                tag_keys[i] = oss.str();
-                {
-                    std::lock_guard<std::mutex> lock(send_mutex_);
-                    send_results_[tag_keys[i]] = SendResult{false, false, "", tag};
-                }
-                bytes_sent_ += rc;
+            if (is_transacted && !send_txn_id.empty()) {
+                pn_delivery_update(dlv, 0x34);
+                pn_data_t* disp_data = pn_disposition_data(
+                    pn_delivery_local(dlv));
+                pn_data_clear(disp_data);
+                pn_data_put_list(disp_data);
+                pn_data_enter(disp_data);
+                pn_data_put_binary(disp_data, pn_bytes(send_txn_id.size(),
+                    reinterpret_cast<const char*>(send_txn_id.data())));
+                pn_data_exit(disp_data);
             }
-        } catch (const std::exception& e) {
-            error = e.what();
+
+            pn_message_t* c_msg = proton_unwrap<pn_message_t>(st.msgs[i]);
+            pn_rwbytes_t buf = {0, nullptr};
+            ssize_t rc = pn_message_encode2(c_msg, &buf);
+            if (rc < 0) {
+                free(buf.start);
+                st.error = "failed to encode batch message " +
+                    std::to_string(i);
+                break;
+            }
+            pn_link_send(c_link, buf.start, rc);
+            pn_link_advance(c_link);
+            free(buf.start);
+
+            pn_delivery_tag_t ptag = pn_delivery_tag(dlv);
+            proton::binary tag(ptag.start, ptag.start + ptag.size);
+            std::ostringstream oss;
+            for (uint8_t b : tag) {
+                oss << std::hex << std::setfill('0') << std::setw(2)
+                    << static_cast<int>(b);
+            }
+            st.tag_keys[i] = oss.str();
+            {
+                std::lock_guard<std::mutex> lock(send_mutex_);
+                send_results_[st.tag_keys[i]] = SendResult{false, false, "", tag};
+            }
+            bytes_sent_ += rc;
         }
-        std::lock_guard<std::mutex> lock(mtx);
-        send_done = true;
-        cv.notify_all();
-    }, xsink)) {
+        st.release = [this, tag_keys = st.tag_keys]() {
+            std::lock_guard<std::mutex> lock(send_mutex_);
+            for (const std::string& tag_key : tag_keys) {
+                send_results_.erase(tag_key);
+            }
+        };
+    }, 30000, "AmqpConnection::sendBatch", xsink)) {
+        if (!*xsink) {
+            xsink->raiseException("AMQP-SEND-ERROR", "timed out sending the batch");
+        }
         return nullptr;
     }
 
-    // Wait for sends to be queued
-    {
-        std::unique_lock<std::mutex> lock(mtx);
-        cv.wait(lock, [&send_done]() { return send_done; });
-    }
+    // the results of the deliveries are removed when this call returns
+    std::vector<std::string> tag_keys = state->tag_keys;
+    struct SendResultCleanup {
+        QoreAmqpConnection& conn;
+        const std::vector<std::string>& tag_keys;
 
-    if (!error.empty()) {
-        xsink->raiseException("AMQP-SEND-ERROR", "batch send failed: %s", error.c_str());
+        ~SendResultCleanup() {
+            std::lock_guard<std::mutex> lock(conn.send_mutex_);
+            for (const std::string& tag_key : tag_keys) {
+                conn.send_results_.erase(tag_key);
+            }
+        }
+    } send_result_cleanup{*this, tag_keys};
+
+    if (!state->error.empty()) {
+        xsink->raiseException("AMQP-SEND-ERROR", "batch send failed: %s", state->error.c_str());
         return nullptr;
     }
 
@@ -1699,65 +1747,45 @@ QoreObject* QoreAmqpConnection::receive(QoreObject* self, const char* receiver_n
         }
     }
 
-    // Poll with cooperative cancellation (500ms intervals)
-    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    // Wait for a message with cooperative cancellation; a negative timeout does not wait, as before
     std::string recv_name(receiver_name);
-
-    while (true) {
-        // Check for cooperative cancellation
-        if (qore_check_cancel(xsink, "AmqpConnection::receive")) {
+    ReceivedMessage rm;
+    {
+        std::unique_lock<std::mutex> lock(recv_mutex_);
+        if (!waitWithCancel(lock, recv_cv_, [this, &recv_name]() {
+            auto it = received_messages_.find(recv_name);
+            return (it != received_messages_.end() && !it->second.empty()) || !connected_;
+        }, timeout_ms > 0 ? timeout_ms : 0, "AmqpConnection::receive", xsink)) {
+            // cancelled (exception raised) or timed out (return NOTHING)
             return nullptr;
         }
-
-        // Check for messages
-        {
-            std::lock_guard<std::mutex> lock(recv_mutex_);
-            auto it = received_messages_.find(recv_name);
-            if (it != received_messages_.end() && !it->second.empty()) {
-                ReceivedMessage rm = std::move(it->second.front());
-                it->second.pop();
-
-                // Create QoreAmqpMessage from the proton message with delivery tag
-                proton::binary dtag = rm.delivery.tag();
-                QoreAmqpMessage* qmsg;
-                try {
-                    qmsg = new QoreAmqpMessage(rm.msg, dtag, xsink);
-                } catch (const std::exception& e) {
-                    xsink->raiseException("AMQP-RECEIVE-ERROR",
-                        "failed to decode received message: %s", e.what());
-                    return nullptr;
-                }
-                if (*xsink) {
-                    delete qmsg;
-                    return nullptr;
-                }
-
-                // Create Qore object wrapping the message
-                QoreObject* obj = new QoreObject(QC_AMQPMESSAGE, getProgram(), qmsg);
-                return obj;
-            }
-        }
-
-        // Check timeout
-        if (std::chrono::steady_clock::now() >= deadline) {
-            return nullptr;  // Timeout — return NOTHING
-        }
-
-        // Check connection
-        if (!connected_) {
+        auto it = received_messages_.find(recv_name);
+        if (it == received_messages_.end() || it->second.empty()) {
             xsink->raiseException("AMQP-CONNECTION-ERROR",
                 "connection lost while waiting for message");
             return nullptr;
         }
-
-        // Wait up to 500ms or until a message arrives
-        {
-            std::unique_lock<std::mutex> lock(recv_mutex_);
-            auto wait_until = std::min(deadline,
-                std::chrono::steady_clock::now() + std::chrono::milliseconds(QORE_IO_POLL_INTERVAL_MS));
-            recv_cv_.wait_until(lock, wait_until);
-        }
+        rm = std::move(it->second.front());
+        it->second.pop();
     }
+
+    // Create QoreAmqpMessage from the proton message with delivery tag
+    proton::binary dtag = rm.delivery.tag();
+    QoreAmqpMessage* qmsg;
+    try {
+        qmsg = new QoreAmqpMessage(rm.msg, dtag, xsink);
+    } catch (const std::exception& e) {
+        xsink->raiseException("AMQP-RECEIVE-ERROR",
+            "failed to decode received message: %s", e.what());
+        return nullptr;
+    }
+    if (*xsink) {
+        delete qmsg;
+        return nullptr;
+    }
+
+    // Create Qore object wrapping the message
+    return new QoreObject(QC_AMQPMESSAGE, getProgram(), qmsg);
 }
 
 void QoreAmqpConnection::accept(const BinaryNode* delivery_tag, ExceptionSink* xsink) {
@@ -1951,89 +1979,93 @@ void QoreAmqpConnection::beginTransaction(ExceptionSink* xsink) {
         txn_id_.clear();
     }
 
-    // Step 1: Create coordinator sender link using C API (needed to set PN_COORDINATOR target)
-    std::mutex mtx;
-    std::condition_variable cv;
-    bool link_done = false;
-    std::string link_error;
-
-    if (!scheduleWork([&, this]() {
-        try {
-            // Get the session for coordinator creation.
-            // cached_session_ is set from on_sender_open/on_receiver_open which
-            // fires when any link opens (before beginTransaction is called).
-            // Get session from an existing link, or create a temp one.
-            // Use proton_unwrap to get pn_link_t* from proton::sender —
-            // layout verified identical on macOS (0.39.0) and Linux CI (0.40.0):
-            // sender=24 bytes, polymorphic, pn_link_t* at offset sizeof(void*).
-            pn_session_t* c_sess = cached_session_;
-            if (!c_sess) {
-                std::lock_guard<std::mutex> lk2(links_mutex_);
-                if (!senders_.empty()) {
-                    c_sess = pn_link_session(proton_unwrap<pn_link_t>(senders_.begin()->second));
-                } else if (!receivers_.empty()) {
-                    c_sess = pn_link_session(proton_unwrap<pn_link_t>(receivers_.begin()->second));
-                }
+    // Step 1: Create coordinator sender link using C API (needed to set PN_COORDINATOR target); the work does not
+    // reference this stack frame: the thread can give up waiting before it runs
+    std::shared_ptr<WorkState> link_state = std::make_shared<WorkState>();
+    if (!runWork(link_state, [this](WorkState& st) {
+        // Get the session for coordinator creation.
+        // cached_session_ is set from on_sender_open/on_receiver_open which
+        // fires when any link opens (before beginTransaction is called).
+        // Get session from an existing link, or create a temp one.
+        // Use proton_unwrap to get pn_link_t* from proton::sender —
+        // layout verified identical on macOS (0.39.0) and Linux CI (0.40.0):
+        // sender=24 bytes, polymorphic, pn_link_t* at offset sizeof(void*).
+        pn_session_t* c_sess = cached_session_;
+        if (!c_sess) {
+            std::lock_guard<std::mutex> lk2(links_mutex_);
+            if (!senders_.empty()) {
+                c_sess = pn_link_session(proton_unwrap<pn_link_t>(senders_.begin()->second));
+            } else if (!receivers_.empty()) {
+                c_sess = pn_link_session(proton_unwrap<pn_link_t>(receivers_.begin()->second));
             }
-            if (!c_sess) {
-                proton::sender probe = connection_.open_sender("_txn_probe");
-                pn_link_t* probe_link = proton_unwrap<pn_link_t>(probe);
-                c_sess = pn_link_session(probe_link);
-                cached_session_ = c_sess;
-                probe.close();
-            }
-            if (!c_sess) {
-                link_error = "failed to obtain session for transaction coordinator";
-                std::lock_guard<std::mutex> lk3(mtx);
-                link_done = true;
-                cv.notify_all();
-                return;
-            }
-            cached_session_ = c_sess;
-
-            // Create coordinator via C API: pn_sender() + set PN_COORDINATOR
-            // BEFORE pn_link_open(). This ensures the ATTACH frame carries the
-            // coordinator target type (open_sender() serializes the ATTACH
-            // immediately, so modifying the terminus after is too late).
-            pn_link_t* c_link = pn_sender(c_sess, TXN_COORDINATOR_NAME);
-            pn_terminus_set_type(pn_link_target(c_link), PN_COORDINATOR);
-            pn_link_open(c_link);
-            txn_coordinator_link_ = c_link;
-
-            // Workaround for Proton C++ >= 0.40.0 (PROTON-2825):
-            // The C++ messaging_adapter's on_link_remote_open() rejects ANY link
-            // whose remote target is PN_COORDINATOR by setting amqp:not-implemented
-            // and calling pn_link_close(). This was intended for server-side
-            // rejection of incoming coordinator links but also breaks client-side
-            // coordinators created via the C API.
-            //
-            // Fix: schedule a guard work item that runs via run_all_jobs() BEFORE
-            // each event dispatch. When the broker's ATTACH response sets the
-            // remote target to PN_COORDINATOR, the guard changes it to PN_TARGET
-            // before the adapter checks it. This prevents the rejection while
-            // preserving correct coordinator behavior (the target type is only
-            // checked during ATTACH exchange, not for subsequent messages).
-            scheduleCoordinatorGuard();
-        } catch (const std::exception& e) {
-            link_error = e.what();
         }
-        std::lock_guard<std::mutex> lk(mtx);
-        link_done = true;
-        cv.notify_all();
-    }, xsink)) {
+        if (!c_sess) {
+            proton::sender probe = connection_.open_sender("_txn_probe");
+            pn_link_t* probe_link = proton_unwrap<pn_link_t>(probe);
+            c_sess = pn_link_session(probe_link);
+            cached_session_ = c_sess;
+            probe.close();
+        }
+        if (!c_sess) {
+            st.error = "failed to obtain session for transaction coordinator";
+            return;
+        }
+        cached_session_ = c_sess;
+
+        // Create coordinator via C API: pn_sender() + set PN_COORDINATOR
+        // BEFORE pn_link_open(). This ensures the ATTACH frame carries the
+        // coordinator target type (open_sender() serializes the ATTACH
+        // immediately, so modifying the terminus after is too late).
+        pn_link_t* c_link = pn_sender(c_sess, TXN_COORDINATOR_NAME);
+        pn_terminus_set_type(pn_link_target(c_link), PN_COORDINATOR);
+        pn_link_open(c_link);
+        txn_coordinator_link_ = c_link;
+        st.release = [this, c_link]() {
+            if (txn_coordinator_link_ == c_link) {
+                txn_coordinator_link_ = nullptr;
+            }
+            pn_link_close(c_link);
+        };
+
+        // Workaround for Proton C++ >= 0.40.0 (PROTON-2825):
+        // The C++ messaging_adapter's on_link_remote_open() rejects ANY link
+        // whose remote target is PN_COORDINATOR by setting amqp:not-implemented
+        // and calling pn_link_close(). This was intended for server-side
+        // rejection of incoming coordinator links but also breaks client-side
+        // coordinators created via the C API.
+        //
+        // Fix: schedule a guard work item that runs via run_all_jobs() BEFORE
+        // each event dispatch. When the broker's ATTACH response sets the
+        // remote target to PN_COORDINATOR, the guard changes it to PN_TARGET
+        // before the adapter checks it. This prevents the rejection while
+        // preserving correct coordinator behavior (the target type is only
+        // checked during ATTACH exchange, not for subsequent messages).
+        scheduleCoordinatorGuard();
+    }, 30000, "AmqpConnection::beginTransaction", xsink)) {
+        if (!*xsink) {
+            xsink->raiseException("AMQP-TRANSACTION-ERROR",
+                "timed out creating the transaction coordinator");
+        }
+        return;
+    }
+    if (!link_state->error.empty()) {
+        xsink->raiseException("AMQP-TRANSACTION-ERROR",
+            "failed to create transaction coordinator: %s", link_state->error.c_str());
         return;
     }
 
-    // Wait for link creation
-    {
-        std::unique_lock<std::mutex> lk(mtx);
-        cv.wait(lk, [&]() { return link_done; });
-    }
-    if (!link_error.empty()) {
-        xsink->raiseException("AMQP-TRANSACTION-ERROR",
-            "failed to create transaction coordinator: %s", link_error.c_str());
-        return;
-    }
+    // the coordinator is closed unless the transaction is started
+    struct CoordinatorGuard {
+        QoreAmqpConnection& conn;
+        const std::shared_ptr<WorkState>& state;
+        bool started;
+
+        ~CoordinatorGuard() {
+            if (!started) {
+                conn.scheduleRelease(state);
+            }
+        }
+    } coordinator_guard{*this, link_state, false};
 
     // Step 2: Wait for coordinator to get credit (on_sendable)
     {
@@ -2098,6 +2130,7 @@ void QoreAmqpConnection::beginTransaction(ExceptionSink* xsink) {
         }
     }
 
+    coordinator_guard.started = true;
     txn_active_ = true;
 }
 
@@ -2229,65 +2262,56 @@ QoreStringNode* QoreAmqpConnection::createDurableReceiver(const char* address,
         }
     }
 
-    std::mutex mtx;
-    std::condition_variable cv;
-    bool done = false;
-    std::string error;
+    // the work does not reference this stack frame: the thread can give up waiting before it runs
+    struct CreateReceiverState : public WorkState {
+        std::string name;
+    };
+    std::shared_ptr<CreateReceiverState> state = std::make_shared<CreateReceiverState>();
+    std::string subscription(subscription_name);
+    if (!runWork(state, [this, addr, selector, subscription](CreateReceiverState& st) {
+        proton::receiver_options ro;
+        proton::source_options so;
+        so.address(addr);
 
-    if (!scheduleWork([&, this]() {
-        try {
-            proton::receiver_options ro;
-            proton::source_options so;
-            so.address(addr);
+        // Configure durable subscription
+        so.durability_mode(proton::source::UNSETTLED_STATE);
+        so.expiry_policy(proton::source::NEVER);
 
-            // Configure durable subscription
-            so.durability_mode(proton::source::UNSETTLED_STATE);
-            so.expiry_policy(proton::source::NEVER);
-
-            // Apply JMS selector filter if provided
-            if (!selector.empty()) {
-                proton::source::filter_map fm;
-                proton::symbol filter_key("selector");
-                proton::value filter_value;
-                proton::codec::encoder enc(filter_value);
-                enc << proton::codec::start::described()
-                    << proton::symbol("apache.org:selector-filter:string")
-                    << selector
-                    << proton::codec::finish();
-                fm.put(filter_key, filter_value);
-                so.filters(fm);
-            }
-
-            ro.source(so);
-            // Default auto_accept to false so manual disposition works
-            ro.auto_accept(false);
-            // Use subscription name as the link name for durable subscriptions
-            ro.name(name);
-
-            proton::receiver r = connection_.open_receiver(addr, ro);
-            name = r.name();
-            {
-                std::lock_guard<std::mutex> lock(links_mutex_);
-                receivers_[name] = r;
-            }
-            // Register for reconnect recovery (durable)
-            {
-                std::lock_guard<std::mutex> lock(registry_mutex_);
-                link_registry_.push_back(LinkInfo{addr, false, true, std::string(subscription_name)});
-            }
-        } catch (const std::exception& e) {
-            error = e.what();
+        // Apply JMS selector filter if provided
+        if (!selector.empty()) {
+            proton::source::filter_map fm;
+            proton::symbol filter_key("selector");
+            proton::value filter_value;
+            proton::codec::encoder enc(filter_value);
+            enc << proton::codec::start::described()
+                << proton::symbol("apache.org:selector-filter:string")
+                << selector
+                << proton::codec::finish();
+            fm.put(filter_key, filter_value);
+            so.filters(fm);
         }
-        std::lock_guard<std::mutex> lock(mtx);
-        done = true;
-        cv.notify_all();
-    }, xsink)) {
-        return nullptr;
-    }
 
-    std::unique_lock<std::mutex> lock(mtx);
-    if (!waitWithCancel(lock, cv, [&done]() { return done; },
-            30000, "AmqpConnection::createDurableReceiver", xsink)) {
+        ro.source(so);
+        // Default auto_accept to false so manual disposition works
+        ro.auto_accept(false);
+        // Use subscription name as the link name for durable subscriptions
+        ro.name(subscription);
+
+        proton::receiver r = connection_.open_receiver(addr, ro);
+        st.name = r.name();
+        {
+            std::lock_guard<std::mutex> lock(links_mutex_);
+            receivers_[st.name] = r;
+        }
+        // Register for reconnect recovery (durable)
+        {
+            std::lock_guard<std::mutex> lock(registry_mutex_);
+            link_registry_.push_back(LinkInfo{addr, false, true, subscription});
+        }
+        st.release = [this, r, name = st.name, addr]() mutable {
+            releaseReceiver(r, name, addr, true);
+        };
+    }, 30000, "AmqpConnection::createDurableReceiver", xsink)) {
         if (!*xsink) {
             xsink->raiseException("AMQP-RECEIVER-ERROR",
                 "timed out creating durable receiver for '%s'", address);
@@ -2295,12 +2319,13 @@ QoreStringNode* QoreAmqpConnection::createDurableReceiver(const char* address,
         return nullptr;
     }
 
-    if (!error.empty()) {
+    if (!state->error.empty()) {
         xsink->raiseException("AMQP-RECEIVER-ERROR",
             "failed to create durable receiver for '%s' with subscription '%s': %s",
-            address, subscription_name, error.c_str());
+            address, subscription_name, state->error.c_str());
         return nullptr;
     }
+    name = state->name;
 
     // Wait for the broker to confirm the link attach (see createReceiver()
     // for the rationale).
@@ -2309,6 +2334,9 @@ QoreStringNode* QoreAmqpConnection::createDurableReceiver(const char* address,
         if (!waitWithCancel(lock, attach_cv_,
                 [&]() { return attached_receivers_.count(name) > 0; },
                 30000, "AmqpConnection::createDurableReceiver", xsink)) {
+            lock.unlock();
+            // the receiver is not returned, so it is closed
+            scheduleRelease(state);
             if (!*xsink) {
                 xsink->raiseException("AMQP-RECEIVER-ERROR",
                     "timed out waiting for broker to attach durable receiver "
@@ -2385,36 +2413,20 @@ void QoreAmqpConnection::unsubscribeDurable(const char* subscription_name, Excep
 
     // To unsubscribe a durable, we open a receiver with the subscription name
     // and immediately detach it, signaling the broker to remove the subscription
-    std::mutex mtx;
-    std::condition_variable cv;
-    bool done = false;
-    std::string error;
+    // the work does not reference this stack frame: the thread can give up waiting before it runs
+    std::shared_ptr<WorkState> state = std::make_shared<WorkState>();
+    if (!runWork(state, [this, name](WorkState& st) {
+        proton::receiver_options ro;
+        proton::source_options so;
+        so.address(name);
+        so.durability_mode(proton::source::UNSETTLED_STATE);
+        so.expiry_policy(proton::source::NEVER);
+        ro.source(so);
+        ro.name(name);
 
-    if (!scheduleWork([&, this]() {
-        try {
-            proton::receiver_options ro;
-            proton::source_options so;
-            so.address(name);
-            so.durability_mode(proton::source::UNSETTLED_STATE);
-            so.expiry_policy(proton::source::NEVER);
-            ro.source(so);
-            ro.name(name);
-
-            proton::receiver r = connection_.open_receiver("", ro);
-            r.detach();
-        } catch (const std::exception& e) {
-            error = e.what();
-        }
-        std::lock_guard<std::mutex> lock(mtx);
-        done = true;
-        cv.notify_all();
-    }, xsink)) {
-        return;
-    }
-
-    std::unique_lock<std::mutex> lock(mtx);
-    if (!waitWithCancel(lock, cv, [&done]() { return done; },
-            30000, "AmqpConnection::unsubscribeDurable", xsink)) {
+        proton::receiver r = connection_.open_receiver("", ro);
+        r.detach();
+    }, 30000, "AmqpConnection::unsubscribeDurable", xsink)) {
         if (!*xsink) {
             xsink->raiseException("AMQP-SUBSCRIPTION-ERROR",
                 "timed out unsubscribing durable '%s'", subscription_name);
@@ -2422,9 +2434,9 @@ void QoreAmqpConnection::unsubscribeDurable(const char* subscription_name, Excep
         return;
     }
 
-    if (!error.empty()) {
+    if (!state->error.empty()) {
         xsink->raiseException("AMQP-SUBSCRIPTION-ERROR",
-            "failed to unsubscribe durable '%s': %s", subscription_name, error.c_str());
+            "failed to unsubscribe durable '%s': %s", subscription_name, state->error.c_str());
     }
 }
 
@@ -2535,37 +2547,21 @@ QoreHashNode* QoreAmqpConnection::managementRequest(const std::string& operation
     if (!mgmt_initialized_) {
         std::lock_guard<std::mutex> lock(mgmt_mutex_);
         if (!mgmt_initialized_) {
-            std::mutex mtx;
-            std::condition_variable cv;
-            bool done = false;
-            std::string error;
+            // the work does not reference this stack frame: the thread can give up waiting before it runs
+            std::shared_ptr<WorkState> state = std::make_shared<WorkState>();
+            if (!runWork(state, [this](WorkState& st) {
+                // Create sender to $management
+                mgmt_sender_ = connection_.open_sender("$management");
 
-            if (!scheduleWork([&, this]() {
-                try {
-                    // Create sender to $management
-                    mgmt_sender_ = connection_.open_sender("$management");
+                // Create dynamic receiver for replies
+                proton::receiver_options ro;
+                proton::source_options so;
+                so.dynamic(true);
+                ro.source(so);
+                mgmt_receiver_ = connection_.open_receiver("", ro);
 
-                    // Create dynamic receiver for replies
-                    proton::receiver_options ro;
-                    proton::source_options so;
-                    so.dynamic(true);
-                    ro.source(so);
-                    mgmt_receiver_ = connection_.open_receiver("", ro);
-
-                    mgmt_initialized_ = true;
-                } catch (const std::exception& e) {
-                    error = e.what();
-                }
-                std::lock_guard<std::mutex> lock(mtx);
-                done = true;
-                cv.notify_all();
-            }, xsink)) {
-                return nullptr;
-            }
-
-            std::unique_lock<std::mutex> lock2(mtx);
-            if (!waitWithCancel(lock2, cv, [&done]() { return done; },
-                    10000, "AmqpConnection::managementRequest", xsink)) {
+                mgmt_initialized_ = true;
+            }, 10000, "AmqpConnection::managementRequest", xsink)) {
                 if (!*xsink) {
                     xsink->raiseException("AMQP-MANAGEMENT-ERROR",
                         "timed out initializing management");
@@ -2573,9 +2569,9 @@ QoreHashNode* QoreAmqpConnection::managementRequest(const std::string& operation
                 return nullptr;
             }
 
-            if (!error.empty()) {
+            if (!state->error.empty()) {
                 xsink->raiseException("AMQP-MANAGEMENT-ERROR",
-                    "failed to initialize management: %s", error.c_str());
+                    "failed to initialize management: %s", state->error.c_str());
                 return nullptr;
             }
         }
@@ -2590,63 +2586,56 @@ QoreHashNode* QoreAmqpConnection::managementRequest(const std::string& operation
     }
     request.reply_to(mgmt_receiver_.source().address());
 
-    // Send and wait for response
-    std::mutex mtx;
-    std::condition_variable cv;
-    bool done = false;
-    std::string error;
-    proton::message response;
+    // Send and wait for response; the work does not reference this stack frame: the thread can give up waiting
+    // before it runs
+    struct RequestState {
+        proton::message request;
+        //! set when the request could not be sent; error is set before
+        std::atomic<bool> failed{false};
+        std::string error;
+    };
+    std::shared_ptr<RequestState> state = std::make_shared<RequestState>();
+    state->request = std::move(request);
+    std::string reply_addr = mgmt_receiver_.source().address();
 
-    if (!scheduleWork([&, this]() {
+    if (!scheduleWork([this, state]() {
         try {
-            mgmt_sender_.send(request);
+            mgmt_sender_.send(state->request);
         } catch (const std::exception& e) {
-            error = e.what();
-            std::lock_guard<std::mutex> lock(mtx);
-            done = true;
-            cv.notify_all();
+            state->error = e.what();
+            state->failed = true;
+            // wake the thread waiting for the response
+            std::lock_guard<std::mutex> lock(recv_mutex_);
+            recv_cv_.broadcast();
         }
     }, xsink)) {
         return nullptr;
     }
 
     // Wait for response with timeout and cooperative cancellation
-    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    std::string reply_addr = mgmt_receiver_.source().address();
-
-    while (!done) {
-        // Check cooperative cancellation
-        if (qore_check_cancel(xsink, "AmqpConnection::managementRequest")) {
-            return nullptr;
-        }
-
-        if (std::chrono::steady_clock::now() >= deadline) {
-            // Timeout — management not supported
-            return nullptr;
-        }
-
-        {
-            std::lock_guard<std::mutex> lock(recv_mutex_);
-            auto it = received_messages_.find(reply_addr);
-            if (it != received_messages_.end() && !it->second.empty()) {
-                ReceivedMessage rm = std::move(it->second.front());
-                it->second.pop();
-                response = rm.msg;
-                done = true;
-                break;
+    proton::message response;
+    {
+        std::unique_lock<std::mutex> lock(recv_mutex_);
+        if (!waitWithCancel(lock, recv_cv_, [this, &state, &reply_addr]() {
+            if (state->failed) {
+                return true;
             }
+            auto it = received_messages_.find(reply_addr);
+            return it != received_messages_.end() && !it->second.empty();
+        }, 5000, "AmqpConnection::managementRequest", xsink)) {
+            // cancelled (exception raised), or timed out: management not supported
+            return nullptr;
         }
-
-        std::unique_lock<std::mutex> lock2(recv_mutex_);
-        auto wait_until = std::min(deadline,
-            std::chrono::steady_clock::now()
-                + std::chrono::milliseconds(QORE_IO_POLL_INTERVAL_MS));
-        recv_cv_.wait_until(lock2, wait_until);
+        if (!state->failed) {
+            auto it = received_messages_.find(reply_addr);
+            response = it->second.front().msg;
+            it->second.pop();
+        }
     }
 
-    if (!error.empty()) {
+    if (state->failed) {
         xsink->raiseException("AMQP-MANAGEMENT-ERROR",
-            "management request failed: %s", error.c_str());
+            "management request failed: %s", state->error.c_str());
         return nullptr;
     }
 
@@ -2757,3 +2746,56 @@ std::string QoreAmqpConnection::deliveryTagKey(const BinaryNode* tag) {
     }
     return oss.str();
 }
+
+#ifdef DEBUG
+// the longest time that the debug hooks wait for the event thread
+static constexpr int DebugWaitSeconds = 30;
+
+void QoreAmqpConnection::debugHoldEventThread(ExceptionSink* xsink) {
+    {
+        std::lock_guard<std::mutex> lock(debug_mutex_);
+        if (debug_holding_) {
+            xsink->raiseException("AMQP-DEBUG-ERROR", "the event thread is already held");
+            return;
+        }
+        debug_release_ = false;
+    }
+    if (!scheduleWork([this]() {
+        std::unique_lock<std::mutex> lock(debug_mutex_);
+        debug_holding_ = true;
+        debug_pending_ = 0;
+        debug_cv_.notify_all();
+        debug_cv_.wait(lock, [this]() { return debug_release_; });
+        debug_holding_ = false;
+        debug_release_ = false;
+    }, xsink)) {
+        return;
+    }
+    std::unique_lock<std::mutex> lock(debug_mutex_);
+    if (!debug_cv_.wait_for(lock, std::chrono::seconds(DebugWaitSeconds), [this]() { return debug_holding_; })) {
+        xsink->raiseException("AMQP-DEBUG-ERROR", "the event thread was not held within %d seconds",
+            DebugWaitSeconds);
+    }
+}
+
+void QoreAmqpConnection::debugWaitPendingWork(int64 count, ExceptionSink* xsink) {
+    std::unique_lock<std::mutex> lock(debug_mutex_);
+    if (!debug_holding_) {
+        xsink->raiseException("AMQP-DEBUG-ERROR", "the event thread is not held");
+        return;
+    }
+    if (!debug_cv_.wait_for(lock, std::chrono::seconds(DebugWaitSeconds),
+            [this, count]() { return debug_pending_ >= count; })) {
+        xsink->raiseException("AMQP-DEBUG-ERROR", "only " QLLD " of " QLLD " work items were scheduled within %d "
+            "seconds", debug_pending_, count, DebugWaitSeconds);
+    }
+}
+
+void QoreAmqpConnection::debugReleaseEventThread() {
+    std::lock_guard<std::mutex> lock(debug_mutex_);
+    if (debug_holding_) {
+        debug_release_ = true;
+        debug_cv_.notify_all();
+    }
+}
+#endif

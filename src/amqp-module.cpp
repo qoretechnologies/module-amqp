@@ -27,6 +27,7 @@
 #include "amqp-module.h"
 #include "QC_AmqpConnection.h"
 #include "QC_AmqpMessage.h"
+#include "QoreAmqpConnection.h"
 
 static void amqp_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void amqp_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -62,6 +63,37 @@ const TypedHashDecl* hashdeclAmqpConnectionStats = nullptr;
 
 QoreNamespace AmqpNs("Qore::Amqp");
 
+#ifdef DEBUG
+// debug builds only: methods that hold the Proton event thread, so that tests can cancel a thread waiting for work
+// that has not run yet; they are not part of the API
+static QoreValue AmqpConnection_debugHoldEventThread(QoreObject* self, QoreAmqpConnection* conn,
+        const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    conn->debugHoldEventThread(xsink);
+    return QoreValue();
+}
+
+static QoreValue AmqpConnection_debugWaitPendingWork(QoreObject* self, QoreAmqpConnection* conn,
+        const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    conn->debugWaitPendingWork(args->retrieveEntry(0).getAsBigInt(), xsink);
+    return QoreValue();
+}
+
+static QoreValue AmqpConnection_debugReleaseEventThread(QoreObject* self, QoreAmqpConnection* conn,
+        const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    conn->debugReleaseEventThread();
+    return QoreValue();
+}
+
+static void add_debug_methods(QoreClass* cls) {
+    cls->addMethod("debugHoldEventThread", (q_method_t)AmqpConnection_debugHoldEventThread, Public, QCF_NO_FLAGS,
+        QDOM_DEFAULT, nothingTypeInfo);
+    cls->addMethod("debugWaitPendingWork", (q_method_t)AmqpConnection_debugWaitPendingWork, Public, QCF_NO_FLAGS,
+        QDOM_DEFAULT, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
+    cls->addMethod("debugReleaseEventThread", (q_method_t)AmqpConnection_debugReleaseEventThread, Public,
+        QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo);
+}
+#endif
+
 static void amqp_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     // Initialize hashdecls (dependency order — SSL/SASL before ConnectionOptions)
     hashdeclAmqpSslOptions = init_hashdecl_AmqpSslOptions(AmqpNs);
@@ -78,7 +110,11 @@ static void amqp_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
 
     // Initialize classes
     AmqpNs.addSystemClass(initAmqpMessageClass(AmqpNs));
-    AmqpNs.addSystemClass(initAmqpConnectionClass(AmqpNs));
+    QoreClass* conn_cls = initAmqpConnectionClass(AmqpNs);
+#ifdef DEBUG
+    add_debug_methods(conn_cls);
+#endif
+    AmqpNs.addSystemClass(conn_cls);
 }
 
 static void amqp_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {
