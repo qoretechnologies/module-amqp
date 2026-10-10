@@ -287,7 +287,8 @@ void QoreAmqpConnection::Handler::on_connection_open(proton::connection& c) {
     if (is_reconnect) {
         conn_.pushEvent("amqp-reconnected");
 
-        // the management links are created again for the next request
+        // the transaction coordinator and the management links are created again when needed
+        conn_.txn_coordinator_link_ = nullptr;
         conn_.mgmt_initialized_ = false;
         conn_.mgmt_receiver_name_.clear();
         {
@@ -2001,6 +2002,21 @@ void QoreAmqpConnection::beginTransaction(ExceptionSink* xsink) {
     // reference this stack frame: the thread can give up waiting before it runs
     std::shared_ptr<WorkState> link_state = std::make_shared<WorkState>();
     if (!runWork(link_state, [this](WorkState& st) {
+        // A coordinator link declares any number of transactions: an open coordinator is used again, as a second
+        // link with the same name would not get credit
+        if (txn_coordinator_link_) {
+            pn_state_t state = pn_link_state(txn_coordinator_link_);
+            if ((state & PN_LOCAL_ACTIVE) && (state & PN_REMOTE_ACTIVE)) {
+                if (pn_link_credit(txn_coordinator_link_) > 0) {
+                    // on_sendable() is not called again while the link has credit
+                    std::lock_guard<std::mutex> lock(txn_mutex_);
+                    txn_coordinator_ready_ = true;
+                    txn_cv_.broadcast();
+                }
+                return;
+            }
+        }
+
         // Get the session for coordinator creation.
         // cached_session_ is set from on_sender_open/on_receiver_open which
         // fires when any link opens (before beginTransaction is called).
