@@ -1901,12 +1901,129 @@ void QoreAmqpConnection::release(const BinaryNode* delivery_tag, ExceptionSink* 
 
 void QoreAmqpConnection::modify(const BinaryNode* delivery_tag, bool failed, bool undeliverable,
         const QoreHashNode* annotations, ExceptionSink* xsink) {
-    // NOTE: the Qpid Proton C++ delivery.modify() API does not accept parameters
-    // for failed/undeliverable/annotations — these AMQP 1.0 MODIFIED outcome fields
-    // are not exposed. The parameters are accepted at the Qore level for forward
-    // compatibility but are currently ignored.
-    // TODO: implement via low-level proton codec when Proton adds parameter support
-    settle(delivery_tag, [](proton::delivery& d) { d.modify(); }, xsink);
+    if (!checkConnected(xsink)) {
+        return;
+    }
+    // the annotations are encoded here; the AMQP data object is not shared, so the event thread can copy it into
+    // the disposition
+    std::shared_ptr<pn_data_t> ann;
+    if (annotations && !annotations->empty()) {
+        ann.reset(pn_data(0), pn_data_free);
+        if (putAnnotations(ann.get(), annotations, xsink)) {
+            return;
+        }
+    }
+    std::string tag_key = deliveryTagKey(delivery_tag);
+    {
+        std::lock_guard<std::mutex> lock(delivery_mutex_);
+        if (!pending_tags_.erase(tag_key)) {
+            xsink->raiseException("AMQP-DELIVERY-ERROR", "delivery tag not found");
+            return;
+        }
+    }
+
+    // the Proton C++ API settles with the modified outcome without its fields, so the C disposition API is used; on
+    // the event thread
+    scheduleWork([this, tag_key, failed, undeliverable, ann]() {
+        auto it = pending_deliveries_.find(tag_key);
+        if (it == pending_deliveries_.end()) {
+            return;
+        }
+        proton::delivery delivery = it->second;
+        pending_deliveries_.erase(it);
+        pn_delivery_t* dlv = proton_unwrap<pn_delivery_t>(delivery);
+        pn_disposition_t* disp = pn_delivery_local(dlv);
+        pn_disposition_set_failed(disp, failed);
+        pn_disposition_set_undeliverable(disp, undeliverable);
+        if (ann) {
+            pn_data_copy(pn_disposition_annotations(disp), ann.get());
+        }
+        pn_delivery_update(dlv, PN_MODIFIED);
+        pn_delivery_settle(dlv);
+    }, xsink);
+}
+
+int QoreAmqpConnection::putAnnotations(pn_data_t* data, const QoreHashNode* annotations, ExceptionSink* xsink) {
+    // message annotations are a map with symbol keys
+    pn_data_put_map(data);
+    pn_data_enter(data);
+    ConstHashIterator i(annotations);
+    while (i.next()) {
+        const char* key = i.getKey();
+        pn_data_put_symbol(data, pn_bytes(strlen(key), key));
+        if (putData(data, i.get(), xsink)) {
+            return -1;
+        }
+    }
+    pn_data_exit(data);
+    return 0;
+}
+
+int QoreAmqpConnection::putData(pn_data_t* data, const QoreValue& val_arg, ExceptionSink* xsink) {
+    // the same conversions as QoreAmqpHelper::qoreToProton()
+    const QoreValue val = val_arg.resolveIndirect();
+    if (val.isNullOrNothing()) {
+        pn_data_put_null(data);
+        return 0;
+    }
+    switch (val.getType()) {
+        case NT_BOOLEAN:
+            pn_data_put_bool(data, val.getAsBool());
+            return 0;
+        case NT_INT:
+            pn_data_put_long(data, val.getAsBigInt());
+            return 0;
+        case NT_FLOAT:
+        case NT_NUMBER:
+            pn_data_put_double(data, val.getAsFloat());
+            return 0;
+        case NT_STRING: {
+            TempEncodingHelper str(val.get<const QoreStringNode>(), QCS_UTF8, xsink);
+            if (*xsink) {
+                return -1;
+            }
+            pn_data_put_string(data, pn_bytes(str->size(), str->c_str()));
+            return 0;
+        }
+        case NT_BINARY: {
+            const BinaryNode* bin = val.get<const BinaryNode>();
+            pn_data_put_binary(data, pn_bytes(bin->size(), static_cast<const char*>(bin->getPtr())));
+            return 0;
+        }
+        case NT_DATE:
+            pn_data_put_timestamp(data, QoreAmqpHelper::dateToTimestamp(val.get<const DateTimeNode>()).milliseconds());
+            return 0;
+        case NT_HASH: {
+            pn_data_put_map(data);
+            pn_data_enter(data);
+            ConstHashIterator i(val.get<const QoreHashNode>());
+            while (i.next()) {
+                const char* key = i.getKey();
+                pn_data_put_string(data, pn_bytes(strlen(key), key));
+                if (putData(data, i.get(), xsink)) {
+                    return -1;
+                }
+            }
+            pn_data_exit(data);
+            return 0;
+        }
+        case NT_LIST: {
+            pn_data_put_list(data);
+            pn_data_enter(data);
+            ConstListIterator i(val.get<const QoreListNode>());
+            while (i.next()) {
+                if (putData(data, i.getValue(), xsink)) {
+                    return -1;
+                }
+            }
+            pn_data_exit(data);
+            return 0;
+        }
+        default:
+            xsink->raiseException("AMQP-TYPE-ERROR", "unsupported Qore type '%s' for AMQP conversion",
+                val.getFullTypeName());
+            return -1;
+    }
 }
 
 void QoreAmqpConnection::scheduleCoordinatorGuard() {

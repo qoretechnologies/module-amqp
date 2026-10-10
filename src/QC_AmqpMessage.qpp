@@ -223,6 +223,28 @@ auto AmqpMessage::getCorrelationId() [flags=RET_VALUE_ONLY] {
     return msg->getSubject(xsink);
 }
 
+//! Returns the delivery count of the message header
+/** The delivery count is the number of earlier unsuccessful delivery attempts of the message; the broker increments
+    it, for example, when a receiver settles the message with
+    @ref Qore::Amqp::AmqpConnection::modify() "AmqpConnection::modify()" with \a failed set to @ref True
+
+    @return the delivery count of the message header
+
+    @par Example:
+    @code{.py}
+*AmqpMessage msg = conn.receive(receiver, 5s);
+if (msg && msg.getDeliveryCount() > 3) {
+    # the message has failed too often: do not process it again
+    conn.modify(msg.getDeliveryTag(), False, True);
+}
+    @endcode
+
+    @since amqp 1.0
+*/
+int AmqpMessage::getDeliveryCount() [flags=CONSTANT] {
+    return msg->getDeliveryCount();
+}
+
 //! Returns the delivery tag for received messages
 /** The delivery tag is a binary identifier assigned by the broker when a message
     is received. It is used to acknowledge, reject, or release the message.

@@ -442,6 +442,16 @@ private:
     //! Releases the Proton objects of the connection; called when the event thread has ended
     DLLLOCAL void clearLinks();
 
+    //! Writes message annotations (a map with symbol keys) to AMQP data
+    /** @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL static int putAnnotations(pn_data_t* data, const QoreHashNode* annotations, ExceptionSink* xsink);
+
+    //! Writes a value to AMQP data with the conversions of QoreAmqpHelper::qoreToProton()
+    /** @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL static int putData(pn_data_t* data, const QoreValue& val, ExceptionSink* xsink);
+
     //! Settles a delivery received by receive() with the given disposition
     DLLLOCAL void settle(const BinaryNode* delivery_tag, void (*disposition)(proton::delivery&),
         ExceptionSink* xsink);

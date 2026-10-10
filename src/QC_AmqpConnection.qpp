@@ -536,18 +536,20 @@ nothing AmqpConnection::release(binary delivery_tag) [flags=NAMED_ARGS] {
     conn->release(delivery_tag, xsink);
 }
 
-//! Modifies a delivered message with new state
+//! Settles a delivered message with the AMQP \c modified outcome, which returns it to the broker
 /** @param delivery_tag the delivery tag from the received message
-    @param failed if True, indicates the message was not processed successfully
-    @param undeliverable if True, indicates the message should not be redelivered to this consumer
-    @param annotations optional message annotations to add
+    @param failed if True, the delivery attempt failed: the broker increments the delivery count of the message
+    @param undeliverable if True, the message must not be delivered again to this consumer
+    @param annotations message annotations that the broker combines with the annotations of the message (keys are
+    sent as symbols, ex: \c "x-opt-reason")
 
     @throw AMQP-CONNECTION-ERROR if the connection is not open
     @throw AMQP-DELIVERY-ERROR if the delivery tag is not found
+    @throw AMQP-TYPE-ERROR if an annotation value cannot be converted to an AMQP value
 
     @par Example:
     @code{.py}
-conn.modify(delivery_tag, True, False);
+conn.modify(delivery_tag, True, False, {"x-opt-reason": "invalid order"});
     @endcode
 
 */

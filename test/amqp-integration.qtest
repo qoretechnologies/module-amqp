@@ -31,6 +31,7 @@
 %requires QUnit
 %requires amqp
 %requires AmqpUtil
+%requires Util
 
 %exec-class AmqpIntegrationTest
 
@@ -80,6 +81,7 @@ public class AmqpIntegrationTest inherits QUnit::Test {
 
         # Modify disposition
         addTestCase("modify message", \testModifyMessage());
+        addTestCase("modify sends the fields of the modified outcome", \testModifyOutcome());
 
         # Link close
         addTestCase("close sender", \testCloseSender());
@@ -572,6 +574,49 @@ public class AmqpIntegrationTest inherits QUnit::Test {
     }
 
     # --- Modify disposition ---
+
+    #! modify() settles with the modified outcome and its fields: failed, undeliverable, and message annotations
+    testModifyOutcome() {
+        string addr = getUniqueAddress();
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+
+        string sender = conn.createSender(addr);
+        string receiver = conn.createReceiver(addr);
+        conn.send(sender, new AmqpMessage("modify-outcome"));
+        *AmqpMessage msg = conn.receive(receiver, 10s);
+        assertEq("modify-outcome", msg ? msg.getBody() : NOTHING);
+        assertEq(0, msg.getDeliveryCount());
+
+        # a failed delivery is delivered again, with the delivery count incremented
+        conn.modify(msg.getDeliveryTag(), True, False);
+        *AmqpMessage again = conn.receive(receiver, 10s);
+        assertEq("modify-outcome", again ? again.getBody() : NOTHING, "the failed delivery is delivered again");
+        assertEq(1, again.getDeliveryCount(), "the delivery count is incremented");
+
+        # an undeliverable message is not delivered again to this consumer
+        conn.modify(again.getDeliveryTag(), False, True);
+        assertNothing(conn.receive(receiver, 2s), "the undeliverable message is not delivered again");
+
+        # the annotations are sent in the outcome: the broker merges them into the message or not (Artemis does not),
+        # so the frames of a connection that modifies a delivery are traced
+        string script = tmp_location() + DirSep + sprintf("amqp-modify-%d.q", getpid());
+        on_exit unlink(script);
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf("%%modern\n%%requires amqp\n"
+            "AmqpConnection conn(<AmqpConnectionOptions>{\"url\": %y});\nconn.connect();\n"
+            "string sender = conn.createSender(%y);\nstring receiver = conn.createReceiver(%y);\n"
+            "conn.send(sender, new AmqpMessage(\"annotated\"));\n"
+            "conn.modify(conn.receive(receiver, 10s).getDeliveryTag(), True, False, "
+            "{\"x-opt-reason\": \"invalid\", \"x-opt-attempts\": 3});\n"
+            "conn.close();\n", url, addr + "-ann", addr + "-ann"));
+        f.close();
+        string trace = backquote(sprintf("PN_TRACE_FRM=1 qore %s 2>&1", script));
+        *list<*string> outcome = (trace =~ x/(@modified\(39\) \[[^\]]*\])/);
+        assertEq("@modified(39) [delivery-failed=true, undeliverable-here=false, message-annotations={:"
+            "x-opt-reason=\"invalid\", :x-opt-attempts=3}]", outcome[0], "the outcome has the annotations");
+    }
 
     testModifyMessage() {
         string addr = getUniqueAddress();

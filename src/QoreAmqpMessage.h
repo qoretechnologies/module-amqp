@@ -75,6 +75,11 @@ public:
     //! Get the delivery tag (only set for received messages)
     DLLLOCAL BinaryNode* getDeliveryTag() const;
 
+    //! Get the delivery count of the message header
+    DLLLOCAL int64 getDeliveryCount() const {
+        return msg.delivery_count();
+    }
+
     //! Get a const reference to the underlying proton::message
     DLLLOCAL const proton::message& getProtonMessage() const { return msg; }
 
