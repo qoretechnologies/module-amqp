@@ -287,6 +287,14 @@ void QoreAmqpConnection::Handler::on_connection_open(proton::connection& c) {
     if (is_reconnect) {
         conn_.pushEvent("amqp-reconnected");
 
+        // the management links are created again for the next request
+        conn_.mgmt_initialized_ = false;
+        conn_.mgmt_receiver_name_.clear();
+        {
+            std::lock_guard<std::mutex> lock(conn_.recv_mutex_);
+            conn_.mgmt_reply_address_.clear();
+        }
+
         // Recover links if auto_recover_links_ is enabled
         if (conn_.auto_recover_links_) {
             std::lock_guard<std::mutex> reg_lock(conn_.registry_mutex_);
@@ -394,6 +402,12 @@ void QoreAmqpConnection::Handler::on_receiver_open(proton::receiver& r) {
             conn_.cached_session_ = pn_link_session(link);
         }
     }
+    if (!conn_.mgmt_receiver_name_.empty() && r.name() == conn_.mgmt_receiver_name_) {
+        // the broker has assigned the address of the dynamic reply receiver
+        std::lock_guard<std::mutex> lock(conn_.recv_mutex_);
+        conn_.mgmt_reply_address_ = r.source().address();
+        conn_.recv_cv_.broadcast();
+    }
     {
         std::lock_guard<std::mutex> lock(conn_.attach_mutex_);
         conn_.attached_receivers_.insert(r.name());
@@ -436,6 +450,21 @@ void QoreAmqpConnection::Handler::on_sendable(proton::sender& s) {
 void QoreAmqpConnection::Handler::on_message(proton::delivery& d, proton::message& m) {
     std::string receiver_name = d.receiver().name();
     ++conn_.messages_received_;
+
+    if (!conn_.mgmt_receiver_name_.empty() && receiver_name == conn_.mgmt_receiver_name_) {
+        // a management reply is delivered to the request with the message ID that is its correlation ID; a reply to
+        // a request that is no longer waiting (it timed out or was cancelled) is dropped
+        proton::message_id cid = m.correlation_id();
+        if (cid.type() == proton::STRING) {
+            std::string id = proton::get<std::string>(cid);
+            std::lock_guard<std::mutex> lock(conn_.recv_mutex_);
+            if (conn_.mgmt_pending_.count(id)) {
+                conn_.mgmt_replies_[id] = m;
+                conn_.recv_cv_.broadcast();
+            }
+        }
+        return;
+    }
 
     {
         std::lock_guard<std::mutex> lock(conn_.recv_mutex_);
@@ -2550,17 +2579,20 @@ QoreHashNode* QoreAmqpConnection::managementRequest(const std::string& operation
             // the work does not reference this stack frame: the thread can give up waiting before it runs
             std::shared_ptr<WorkState> state = std::make_shared<WorkState>();
             if (!runWork(state, [this](WorkState& st) {
+                {
+                    std::lock_guard<std::mutex> lock(recv_mutex_);
+                    mgmt_reply_address_.clear();
+                }
                 // Create sender to $management
                 mgmt_sender_ = connection_.open_sender("$management");
 
-                // Create dynamic receiver for replies
+                // Create dynamic receiver for replies; its address is known when the broker has attached it
                 proton::receiver_options ro;
                 proton::source_options so;
                 so.dynamic(true);
                 ro.source(so);
                 mgmt_receiver_ = connection_.open_receiver("", ro);
-
-                mgmt_initialized_ = true;
+                mgmt_receiver_name_ = mgmt_receiver_.name();
             }, 10000, "AmqpConnection::managementRequest", xsink)) {
                 if (!*xsink) {
                     xsink->raiseException("AMQP-MANAGEMENT-ERROR",
@@ -2574,17 +2606,49 @@ QoreHashNode* QoreAmqpConnection::managementRequest(const std::string& operation
                     "failed to initialize management: %s", state->error.c_str());
                 return nullptr;
             }
+
+            // Wait for the address of the reply receiver
+            {
+                std::unique_lock<std::mutex> lock(recv_mutex_);
+                if (!waitWithCancel(lock, recv_cv_, [this]() {
+                    return !mgmt_reply_address_.empty() || !connected_;
+                }, 10000, "AmqpConnection::managementRequest", xsink) || mgmt_reply_address_.empty()) {
+                    if (!*xsink) {
+                        xsink->raiseException("AMQP-MANAGEMENT-ERROR",
+                            "the broker did not attach the management reply receiver");
+                    }
+                    return nullptr;
+                }
+            }
+            mgmt_initialized_ = true;
         }
     }
 
-    // Build management request message
+    // Build management request message; the reply is matched to the request by its message ID
+    std::string id = "qore-mgmt-" + std::to_string(++mgmt_request_counter_);
     proton::message request;
+    request.id(id);
     request.properties().put("operation", operation);
     request.properties().put("type", type);
     if (!name.empty()) {
         request.properties().put("name", name);
     }
-    request.reply_to(mgmt_receiver_.source().address());
+    {
+        std::lock_guard<std::mutex> lock(recv_mutex_);
+        request.reply_to(mgmt_reply_address_);
+        mgmt_pending_.insert(id);
+    }
+    // the request no longer waits when this call returns: a later reply is dropped
+    struct PendingRequest {
+        QoreAmqpConnection& conn;
+        const std::string& id;
+
+        ~PendingRequest() {
+            std::lock_guard<std::mutex> lock(conn.recv_mutex_);
+            conn.mgmt_pending_.erase(id);
+            conn.mgmt_replies_.erase(id);
+        }
+    } pending_request{*this, id};
 
     // Send and wait for response; the work does not reference this stack frame: the thread can give up waiting
     // before it runs
@@ -2596,7 +2660,6 @@ QoreHashNode* QoreAmqpConnection::managementRequest(const std::string& operation
     };
     std::shared_ptr<RequestState> state = std::make_shared<RequestState>();
     state->request = std::move(request);
-    std::string reply_addr = mgmt_receiver_.source().address();
 
     if (!scheduleWork([this, state]() {
         try {
@@ -2616,20 +2679,14 @@ QoreHashNode* QoreAmqpConnection::managementRequest(const std::string& operation
     proton::message response;
     {
         std::unique_lock<std::mutex> lock(recv_mutex_);
-        if (!waitWithCancel(lock, recv_cv_, [this, &state, &reply_addr]() {
-            if (state->failed) {
-                return true;
-            }
-            auto it = received_messages_.find(reply_addr);
-            return it != received_messages_.end() && !it->second.empty();
+        if (!waitWithCancel(lock, recv_cv_, [this, &state, &id]() {
+            return state->failed || mgmt_replies_.count(id) > 0;
         }, 5000, "AmqpConnection::managementRequest", xsink)) {
             // cancelled (exception raised), or timed out: management not supported
             return nullptr;
         }
         if (!state->failed) {
-            auto it = received_messages_.find(reply_addr);
-            response = it->second.front().msg;
-            it->second.pop();
+            response = mgmt_replies_[id];
         }
     }
 

@@ -125,6 +125,7 @@ public class AmqpIntegrationTest inherits QUnit::Test {
         addTestCase("queryQueues returns list", \testQueryQueues());
         addTestCase("getAddressInfo returns hash or nothing", \testGetAddressInfo());
         addTestCase("getQueueInfo returns hash or nothing", \testGetQueueInfo());
+        addTestCase("management replies are matched to their requests", \testManagementReplyCorrelation());
 
         set_return_value(main());
     }
@@ -941,6 +942,54 @@ public class AmqpIntegrationTest inherits QUnit::Test {
         if (info) {
             assertEq(NT_HASH, info.typeCode());
         }
+    }
+
+    #! a management service that answers late: the late reply must not be taken as the reply of the next request
+    testManagementReplyCorrelation() {
+        # the management service of the test receives the requests sent to $management
+        AmqpConnection service = getConnection();
+        on_exit service.close();
+        string requests = service.createReceiver("$management");
+
+        AmqpConnection conn = getConnection();
+        on_exit conn.close();
+        Queue results();
+        code request = sub (string address) {
+            background sub () {
+                try {
+                    results.push({"info": conn.getAddressInfo(address)});
+                } catch (hash<ExceptionInfo> ex) {
+                    results.push({"err": ex.err, "desc": ex.desc});
+                }
+            }();
+        };
+
+        # the first request times out without a reply
+        request("first");
+        *AmqpMessage req1 = service.receive(requests, 30s);
+        assertTrue(exists req1, "the service receives the first request");
+        hash<auto> r1 = results.get();
+        assertEq(NOTHING, r1.err, r1.desc);
+        assertEq(NOTHING, r1.info, "the first request times out");
+        assertEq("first", req1.getApplicationProperties().name);
+        *string reply_to = req1.getReplyTo();
+        assertTrue(reply_to.val(), "the request has a reply address");
+        assertTrue(exists req1.getMessageId(), "the request has a message ID");
+
+        # the late reply to the first request, then the second request and its reply
+        string replies = service.createSender(reply_to);
+        service.send(replies, new AmqpMessage({"name": "first"},
+            <AmqpMessageProperties>{"correlation_id": req1.getMessageId()}));
+        request("second");
+        *AmqpMessage req2 = service.receive(requests, 30s);
+        assertTrue(exists req2, "the service receives the second request");
+        assertEq("second", req2.getApplicationProperties().name);
+        assertNeq(req1.getMessageId(), req2.getMessageId());
+        service.send(replies, new AmqpMessage({"name": "second"},
+            <AmqpMessageProperties>{"correlation_id": req2.getMessageId()}));
+        hash<auto> r2 = results.get();
+        assertEq(NOTHING, r2.err, r2.desc);
+        assertEq("second", r2.info.name, "the second request gets its own reply");
     }
 
     # --- Delivery tag tests ---

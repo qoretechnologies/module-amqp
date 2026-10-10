@@ -570,11 +570,22 @@ private:
     //! Proton event thread (i.e. inside a work callback).
     DLLLOCAL void scheduleCoordinatorGuard();
 
-    // Management sender/receiver
+    // Management sender/receiver; the links are used on the event thread only
     std::mutex mgmt_mutex_;
     proton::sender mgmt_sender_;
     proton::receiver mgmt_receiver_;
+    //! the name of the management reply receiver; set and read on the event thread
+    std::string mgmt_receiver_name_;
     std::atomic<bool> mgmt_initialized_{false};
+    // Management replies, protected by recv_mutex_ and signaled with recv_cv_
+    //! the address that the broker assigned to the dynamic reply receiver, set when it is attached
+    std::string mgmt_reply_address_;
+    //! the message IDs of the requests waiting for a reply
+    std::set<std::string> mgmt_pending_;
+    //! replies by the message ID of their request (the correlation ID of the reply)
+    std::map<std::string, proton::message> mgmt_replies_;
+    //! the counter for management request message IDs
+    std::atomic<int64> mgmt_request_counter_{0};
 
     //! Generate a unique link name
     DLLLOCAL std::string generateLinkName(const char* prefix);
