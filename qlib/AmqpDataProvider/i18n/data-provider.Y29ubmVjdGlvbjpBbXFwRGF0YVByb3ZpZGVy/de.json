@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.desc": {
+          "source": "Establishes a connection to an AMQP 1.0 message broker for sending and receiving messages.\n\nSupports plaintext (`amqp://`) and TLS-encrypted (`amqps://`) connections with SASL authentication (credentials in the URL or configured separately).",
+          "message": "Stellt eine Verbindung zu einem AMQP 1.0-Nachrichtenbroker her, um Nachrichten zu senden und zu empfangen.\n\nUnterstützt unverschlüsselte (`amqp://`) und TLS-verschlüsselte (`amqps://`) Verbindungen mit SASL-Authentifizierung (Anmeldeinformationen in der URL oder separat konfiguriert)."
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.display_name": {
+          "source": "AMQP 1.0 Connection",
+          "message": "AMQP 1.0-Verbindung"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.YWRkcmVzc2Vz.desc": {
+          "source": "Comma-separated list of AMQP addresses (queues or topics) to expose as child data providers.\n\nEach address supports sending messages and receiving events.",
+          "message": "Durch Kommas getrennte Liste von AMQP-Adressen (Warteschlangen oder Themen), die als untergeordnete Datenanbieter verfügbar gemacht werden.\n\nJede Adresse unterstützt das Senden von Nachrichten und das Empfangen von Ereignissen."
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.YWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "Adressen"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.YWRkcmVzc2Vz.short_desc": {
+          "source": "AMQP addresses to expose as providers",
+          "message": "AMQP-Adressen als Anbieter verfügbar machen"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.desc": {
+          "source": "Maximum time in milliseconds to wait for AMQP operations.\n\nIncrease for high-latency networks or heavily loaded brokers.",
+          "message": "Maximale Wartezeit in Millisekunden für AMQP-Operationen.\n\nErhöhen für Netzwerke mit hoher Latenz oder stark ausgelastete Broker."
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.display_name": {
+          "source": "Operation Timeout",
+          "message": "Timeout für Operationen"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.short_desc": {
+          "source": "Timeout for AMQP operations in milliseconds",
+          "message": "Timeout für AMQP-Operationen in Millisekunden"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.allowed_values.Ym9vbDp0cnVl.display_name": {
+          "source": "Enabled",
+          "message": "Aktiviert"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.allowed_values.Ym9vbDp0cnVl.short_desc": {
+          "source": "Auto-discover addresses from the broker",
+          "message": "Adressen automatisch vom Broker erkennen"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.allowed_values.Ym9vbDpmYWxzZQ.display_name": {
+          "source": "Disabled",
+          "message": "Deaktiviert"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.allowed_values.Ym9vbDpmYWxzZQ.short_desc": {
+          "source": "Use manually configured addresses only",
+          "message": "Verwenden Sie nur manuell konfigurierte Adressen"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.desc": {
+          "source": "When enabled, queries the broker via the AMQP Management Protocol to automatically discover available addresses.\n\n**Note:** not all brokers support this protocol.",
+          "message": "Wenn aktiviert, fragt das System den Broker über das AMQP-Management-Protokoll ab, um verfügbare Adressen automatisch zu entdecken.\n\n**Hinweis:** Nicht alle Broker unterstützen dieses Protokoll."
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.display_name": {
+          "source": "Auto-Discover Addresses",
+          "message": "Adressen automatisch entdecken"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.short_desc": {
+          "source": "Query the broker for available addresses",
+          "message": "Fragen Sie den Broker nach verfügbaren Adressen"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.short_desc": {
+          "source": "Connect to an AMQP 1.0 message broker",
+          "message": "Verbinden Sie sich mit einem AMQP 1.0-Nachrichtenbroker"
+        }
+      }
+    }
+  }
+}

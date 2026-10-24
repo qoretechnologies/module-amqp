@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.desc": {
+          "source": "Establishes a connection to an AMQP 1.0 message broker for sending and receiving messages.\n\nSupports plaintext (`amqp://`) and TLS-encrypted (`amqps://`) connections with SASL authentication (credentials in the URL or configured separately).",
+          "message": "建立與 AMQP 1.0 訊息代理的連接，以傳送和接收訊息。\n\n支援明文 (`amqp://`) 和 TLS 加密 (`amqps://`) 連接，並支援 SASL 認證（憑證位於 URL 中或另行設定）。"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.display_name": {
+          "source": "AMQP 1.0 Connection",
+          "message": "AMQP 1.0 連接"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.YWRkcmVzc2Vz.desc": {
+          "source": "Comma-separated list of AMQP addresses (queues or topics) to expose as child data providers.\n\nEach address supports sending messages and receiving events.",
+          "message": "以逗號分隔的 AMQP 位址清單（佇列或主題），用於作為子資料提供者公開。\n\n每個位址支援傳送訊息與接收事件。"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.YWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "地址"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.YWRkcmVzc2Vz.short_desc": {
+          "source": "AMQP addresses to expose as providers",
+          "message": "用於公開為提供者的 AMQP 位址"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.desc": {
+          "source": "Maximum time in milliseconds to wait for AMQP operations.\n\nIncrease for high-latency networks or heavily loaded brokers.",
+          "message": "AMQP 操作最大等待時間（毫秒）。\n\n高延遲網路或負載過重的代理伺服器請增加此值。"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.display_name": {
+          "source": "Operation Timeout",
+          "message": "作業逾時"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.short_desc": {
+          "source": "Timeout for AMQP operations in milliseconds",
+          "message": "AMQP 操作逾時時間（毫秒）"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.allowed_values.Ym9vbDp0cnVl.display_name": {
+          "source": "Enabled",
+          "message": "啟用"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.allowed_values.Ym9vbDp0cnVl.short_desc": {
+          "source": "Auto-discover addresses from the broker",
+          "message": "從代理伺服器自動偵測位址"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.allowed_values.Ym9vbDpmYWxzZQ.display_name": {
+          "source": "Disabled",
+          "message": "停用"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.allowed_values.Ym9vbDpmYWxzZQ.short_desc": {
+          "source": "Use manually configured addresses only",
+          "message": "僅使用手動配置的位址"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.desc": {
+          "source": "When enabled, queries the broker via the AMQP Management Protocol to automatically discover available addresses.\n\n**Note:** not all brokers support this protocol.",
+          "message": "啟用時，會透過 AMQP 管理協定查詢代理伺服器，以自動發現可用的位址。\n\n**注意：** 不是所有代理伺服器都支援此協定。"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.display_name": {
+          "source": "Auto-Discover Addresses",
+          "message": "自動偵測位址"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.short_desc": {
+          "source": "Query the broker for available addresses",
+          "message": "查詢代理伺服器以取得可用位址"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.short_desc": {
+          "source": "Connect to an AMQP 1.0 message broker",
+          "message": "連線至 AMQP 1.0 訊息代理伺服器"
+        }
+      }
+    }
+  }
+}

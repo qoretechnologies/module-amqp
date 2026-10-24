@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.desc": {
+          "source": "Establishes a connection to an AMQP 1.0 message broker for sending and receiving messages.\n\nSupports plaintext (`amqp://`) and TLS-encrypted (`amqps://`) connections with SASL authentication (credentials in the URL or configured separately).",
+          "message": "Naváže spojení s brokerem zpráv AMQP 1.0 pro odesílání a přijímání zpráv.\n\nPodporuje nešifrovaná (`amqp://`) a šifrovaná TLS (`amqps://`) spojení s ověřením SASL (přihlašovací údaje v URL nebo konfigurovány zvlášť)."
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.display_name": {
+          "source": "AMQP 1.0 Connection",
+          "message": "Spojení AMQP 1.0"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.YWRkcmVzc2Vz.desc": {
+          "source": "Comma-separated list of AMQP addresses (queues or topics) to expose as child data providers.\n\nEach address supports sending messages and receiving events.",
+          "message": "Seznam adres AMQP oddělených čárkami (fronty nebo téma), které se mají zpřístupnit jako podřízené poskytovatele dat.\n\nKaždá adresa podporuje odesílání zpráv a přijímání událostí."
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.YWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "Adresy"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.YWRkcmVzc2Vz.short_desc": {
+          "source": "AMQP addresses to expose as providers",
+          "message": "Adresy AMQP, které se mají zpřístupnit jako poskytovatele"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.desc": {
+          "source": "Maximum time in milliseconds to wait for AMQP operations.\n\nIncrease for high-latency networks or heavily loaded brokers.",
+          "message": "Maximální doba čekání v milisekundách na operace AMQP.\n\nZvyšte pro sítě s vysokou latencí nebo zatížené brokery."
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.display_name": {
+          "source": "Operation Timeout",
+          "message": "Časový limit operace"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.short_desc": {
+          "source": "Timeout for AMQP operations in milliseconds",
+          "message": "Časový limit operací AMQP v milisekundách"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.allowed_values.Ym9vbDp0cnVl.display_name": {
+          "source": "Enabled",
+          "message": "Povoleno"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.allowed_values.Ym9vbDp0cnVl.short_desc": {
+          "source": "Auto-discover addresses from the broker",
+          "message": "Automatické zjišťování adres z brokera"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.allowed_values.Ym9vbDpmYWxzZQ.display_name": {
+          "source": "Disabled",
+          "message": "Zakázáno"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.allowed_values.Ym9vbDpmYWxzZQ.short_desc": {
+          "source": "Use manually configured addresses only",
+          "message": "Použít pouze ručně nakonfigurované adresy"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.desc": {
+          "source": "When enabled, queries the broker via the AMQP Management Protocol to automatically discover available addresses.\n\n**Note:** not all brokers support this protocol.",
+          "message": "Při povolení dotazuje broker prostřednictvím správního protokolu AMQP, aby automaticky zjistil dostupné adresy.\n\n**Poznámka:** ne všechny brokery tento protokol podporují."
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.display_name": {
+          "source": "Auto-Discover Addresses",
+          "message": "Automatické zjišťování adres"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.short_desc": {
+          "source": "Query the broker for available addresses",
+          "message": "Dotaz na broker o dostupné adresy"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.short_desc": {
+          "source": "Connect to an AMQP 1.0 message broker",
+          "message": "Připojení k zprostředkovateli zpráv AMQP 1.0"
+        }
+      }
+    }
+  }
+}

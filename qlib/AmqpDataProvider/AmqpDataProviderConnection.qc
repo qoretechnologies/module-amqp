@@ -32,7 +32,8 @@ public namespace AmqpDataProvider {
 public class AmqpDataProviderConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
     public {
         #! Connection scheme info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("AmqpDataProvider",
+            "AmqpDataProviderConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "AMQP 1.0 Connection",
             "short_desc": "Connect to an AMQP 1.0 message broker",
             "desc": "Establishes a connection to an AMQP 1.0 message broker for "
@@ -90,7 +91,7 @@ public class AmqpDataProviderConnection inherits ConnectionProvider::AbstractCon
                     "example_value": 30000,
                 },
             },
-        };
+        });
     }
 
     #! Creates the AmqpDataProviderConnection object

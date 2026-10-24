@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.display_name": {
+          "source": "AMQP 1.0 Connection",
+          "message": "AMQP 1.0 Connection"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.short_desc": {
+          "source": "Connect to an AMQP 1.0 message broker",
+          "message": "Connect to an AMQP 1.0 message broker"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.desc": {
+          "source": "Establishes a connection to an AMQP 1.0 message broker for sending and receiving messages.\n\nSupports plaintext (`amqp://`) and TLS-encrypted (`amqps://`) connections with SASL authentication (credentials in the URL or configured separately).",
+          "message": "Establishes a connection to an AMQP 1.0 message broker for sending and receiving messages.\n\nSupports plaintext (`amqp://`) and TLS-encrypted (`amqps://`) connections with SASL authentication (credentials in the URL or configured separately)."
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.YWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "Addresses"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.YWRkcmVzc2Vz.short_desc": {
+          "source": "AMQP addresses to expose as providers",
+          "message": "AMQP addresses to expose as providers"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.YWRkcmVzc2Vz.desc": {
+          "source": "Comma-separated list of AMQP addresses (queues or topics) to expose as child data providers.\n\nEach address supports sending messages and receiving events.",
+          "message": "Comma-separated list of AMQP addresses (queues or topics) to expose as child data providers.\n\nEach address supports sending messages and receiving events."
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.display_name": {
+          "source": "Operation Timeout",
+          "message": "Operation Timeout"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.short_desc": {
+          "source": "Timeout for AMQP operations in milliseconds",
+          "message": "Timeout for AMQP operations in milliseconds"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.desc": {
+          "source": "Maximum time in milliseconds to wait for AMQP operations.\n\nIncrease for high-latency networks or heavily loaded brokers.",
+          "message": "Maximum time in milliseconds to wait for AMQP operations.\n\nIncrease for high-latency networks or heavily loaded brokers."
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.display_name": {
+          "source": "Auto-Discover Addresses",
+          "message": "Auto-Discover Addresses"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.short_desc": {
+          "source": "Query the broker for available addresses",
+          "message": "Query the broker for available addresses"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.desc": {
+          "source": "When enabled, queries the broker via the AMQP Management Protocol to automatically discover available addresses.\n\n**Note:** not all brokers support this protocol.",
+          "message": "When enabled, queries the broker via the AMQP Management Protocol to automatically discover available addresses.\n\n**Note:** not all brokers support this protocol."
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.allowed_values.Ym9vbDpmYWxzZQ.display_name": {
+          "source": "Disabled",
+          "message": "Disabled"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.allowed_values.Ym9vbDpmYWxzZQ.short_desc": {
+          "source": "Use manually configured addresses only",
+          "message": "Use manually configured addresses only"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.allowed_values.Ym9vbDp0cnVl.display_name": {
+          "source": "Enabled",
+          "message": "Enabled"
+        },
+        "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.allowed_values.Ym9vbDp0cnVl.short_desc": {
+          "source": "Auto-discover addresses from the broker",
+          "message": "Auto-discover addresses from the broker"
+        }
+      }
+    }
+  }
+}

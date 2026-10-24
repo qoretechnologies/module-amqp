@@ -336,6 +336,7 @@ qdp 'amqp{url=amqp://guest:guest@localhost:5672,use_management=true}' children
 /** @page amqpdataproviderreleasenotes Release Notes
 
     @section amqpdataprovider_v1_0 AmqpDataProvider Module Version 1.0
+    - added source-owned connection presentation catalogs in all twelve standard locales
     - initial release
 */
 
