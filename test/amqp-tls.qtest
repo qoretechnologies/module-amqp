@@ -17,6 +17,7 @@ class AmqpTlsTest inherits QUnit::Test {
         addTestCase("TLS files respect sandbox", \testSandbox());
         addTestCase("TLS files respect PO_NO_FILESYSTEM", \testNoFilesystem());
         addTestCase("TLS files and the network follow the system policy in a capability", \testCapability());
+        addTestCase("a CA file that cannot be loaded is a connection error", \testMissingCaFile());
         if (!ENV.AMQP_TLS_TEST_URL || !ENV.AMQP_TLS_MTLS_URL || !ENV.AMQP_TLS_CA
                 || !ENV.AMQP_TLS_WRONG_CA || !ENV.AMQP_TLS_CLIENT_CERT || !ENV.AMQP_TLS_CLIENT_KEY) {
             addTestCase("TLS fixture dependency", sub() { testSkip("AMQP_TLS_* fixture not configured"); });
@@ -54,6 +55,18 @@ sub connectWithFiles(bool client) {
         assertThrows("FILESYSTEM-ACCESS-DENIED", sub() { p.callFunction("connectWithFiles", False); });
         assertThrows("FILESYSTEM-ACCESS-DENIED", sub() { p.callFunction("connectWithFiles", True); });
     }
+    #! proton cannot load the trust store when the connection is set up on its event thread: the error must reach
+    #! the connecting thread as a connection error (it ended the process with musl)
+    testMissingCaFile() {
+        AmqpConnection conn(<AmqpConnectionOptions>{
+            "url": "amqps://127.0.0.1:1",
+            "ssl": <AmqpSslOptions>{"ca_cert": "/qore-tls-test/missing-ca.pem"},
+        });
+        assertThrows("AMQP-CONNECTION-ERROR", "/qore-tls-test/missing-ca.pem", \conn.connect(), NOTHING,
+            "a CA file that cannot be loaded is a connection error that names the file");
+        assertFalse(conn.isConnected(), "the connection is not open");
+    }
+
     testCapability() {
         # the TLS files: a sandbox that denies the filesystem and allows the broker's address
         SandboxManager fs();

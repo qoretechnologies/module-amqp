@@ -211,7 +211,7 @@ QoreListNode* parseQueryResponse(const QoreHashNode* result, const TypedHashDecl
 
 // --- Handler implementation ---
 
-void QoreAmqpConnection::Handler::on_container_start(proton::container& c) {
+void QoreAmqpConnection::Handler::on_container_startImpl(proton::container& c) {
     proton::connection_options co;
 
     // SASL
@@ -271,7 +271,7 @@ void QoreAmqpConnection::Handler::on_container_start(proton::container& c) {
     c.connect(conn_.url_, co);
 }
 
-void QoreAmqpConnection::Handler::on_connection_open(proton::connection& c) {
+void QoreAmqpConnection::Handler::on_connection_openImpl(proton::connection& c) {
     bool is_reconnect = conn_.was_connected_;
     {
         std::lock_guard<std::mutex> lock(conn_.wq_mutex_);
@@ -341,7 +341,7 @@ void QoreAmqpConnection::Handler::on_connection_open(proton::connection& c) {
     conn_.connect_cv_.broadcast();
 }
 
-void QoreAmqpConnection::Handler::on_connection_close(proton::connection& c) {
+void QoreAmqpConnection::Handler::on_connection_closeImpl(proton::connection& c) {
     conn_.connected_ = false;
     conn_.connected_since_epoch_us_ = 0;
     conn_.pushEvent("amqp-disconnected");
@@ -367,7 +367,7 @@ void QoreAmqpConnection::Handler::on_connection_close(proton::connection& c) {
     }
 }
 
-void QoreAmqpConnection::Handler::on_connection_error(proton::connection& c) {
+void QoreAmqpConnection::Handler::on_connection_errorImpl(proton::connection& c) {
     std::string err = c.error().what();
     conn_.connected_ = false;
     conn_.pushEvent("amqp-error", err);
@@ -388,7 +388,7 @@ void QoreAmqpConnection::Handler::on_connection_error(proton::connection& c) {
     }
 }
 
-void QoreAmqpConnection::Handler::on_sender_open(proton::sender& s) {
+void QoreAmqpConnection::Handler::on_sender_openImpl(proton::sender& s) {
     // Cache the session for later coordinator creation
     // pn_event_link gives us the raw C pointer without proton_unwrap
     if (!conn_.cached_session_) {
@@ -399,7 +399,7 @@ void QoreAmqpConnection::Handler::on_sender_open(proton::sender& s) {
     }
 }
 
-void QoreAmqpConnection::Handler::on_receiver_open(proton::receiver& r) {
+void QoreAmqpConnection::Handler::on_receiver_openImpl(proton::receiver& r) {
     if (!conn_.cached_session_) {
         pn_link_t* link = proton_unwrap<pn_link_t>(r);
         if (link) {
@@ -419,7 +419,7 @@ void QoreAmqpConnection::Handler::on_receiver_open(proton::receiver& r) {
     conn_.attach_cv_.broadcast();
 }
 
-void QoreAmqpConnection::Handler::on_sender_close(proton::sender& s) {
+void QoreAmqpConnection::Handler::on_sender_closeImpl(proton::sender& s) {
     pn_link_t* link = proton_unwrap<pn_link_t>(s);
     if (link == conn_.txn_coordinator_link_) {
         std::string err = s.error().what();
@@ -430,7 +430,7 @@ void QoreAmqpConnection::Handler::on_sender_close(proton::sender& s) {
     }
 }
 
-void QoreAmqpConnection::Handler::on_sender_error(proton::sender& s) {
+void QoreAmqpConnection::Handler::on_sender_errorImpl(proton::sender& s) {
     pn_link_t* link = proton_unwrap<pn_link_t>(s);
     if (link == conn_.txn_coordinator_link_) {
         std::string err = s.error().what();
@@ -441,7 +441,7 @@ void QoreAmqpConnection::Handler::on_sender_error(proton::sender& s) {
     }
 }
 
-void QoreAmqpConnection::Handler::on_sendable(proton::sender& s) {
+void QoreAmqpConnection::Handler::on_sendableImpl(proton::sender& s) {
     // Check if this is the transaction coordinator (compare C link pointers)
     pn_link_t* link = proton_unwrap<pn_link_t>(s);
     if (link == conn_.txn_coordinator_link_) {
@@ -451,7 +451,7 @@ void QoreAmqpConnection::Handler::on_sendable(proton::sender& s) {
     }
 }
 
-void QoreAmqpConnection::Handler::on_message(proton::delivery& d, proton::message& m) {
+void QoreAmqpConnection::Handler::on_messageImpl(proton::delivery& d, proton::message& m) {
     std::string receiver_name = d.receiver().name();
     ++conn_.messages_received_;
 
@@ -485,7 +485,7 @@ void QoreAmqpConnection::Handler::on_message(proton::delivery& d, proton::messag
     }
 }
 
-void QoreAmqpConnection::Handler::on_tracker_accept(proton::tracker& t) {
+void QoreAmqpConnection::Handler::on_tracker_acceptImpl(proton::tracker& t) {
     proton::binary tag = t.tag();
     std::ostringstream oss;
     for (uint8_t b : tag) {
@@ -504,7 +504,7 @@ void QoreAmqpConnection::Handler::on_tracker_accept(proton::tracker& t) {
     }
 }
 
-void QoreAmqpConnection::Handler::on_tracker_reject(proton::tracker& t) {
+void QoreAmqpConnection::Handler::on_tracker_rejectImpl(proton::tracker& t) {
     proton::binary tag = t.tag();
     std::ostringstream oss;
     for (uint8_t b : tag) {
@@ -523,7 +523,7 @@ void QoreAmqpConnection::Handler::on_tracker_reject(proton::tracker& t) {
     }
 }
 
-void QoreAmqpConnection::Handler::on_tracker_settle(proton::tracker& t) {
+void QoreAmqpConnection::Handler::on_tracker_settleImpl(proton::tracker& t) {
     // Check if this is a transaction coordinator response (by link pointer)
     proton::sender tracker_sender = t.sender();
     pn_link_t* tracker_link = proton_unwrap<pn_link_t>(tracker_sender);
@@ -600,7 +600,7 @@ void QoreAmqpConnection::Handler::on_tracker_settle(proton::tracker& t) {
     }
 }
 
-void QoreAmqpConnection::Handler::on_transport_error(proton::transport& t) {
+void QoreAmqpConnection::Handler::on_transport_errorImpl(proton::transport& t) {
     std::string err = t.error().what();
     conn_.connected_ = false;
     conn_.pushEvent("amqp-error", err);
@@ -622,7 +622,7 @@ void QoreAmqpConnection::Handler::on_transport_error(proton::transport& t) {
     }
 }
 
-void QoreAmqpConnection::Handler::on_error(const proton::error_condition& ec) {
+void QoreAmqpConnection::Handler::on_errorImpl(const proton::error_condition& ec) {
     std::string err = ec.what();
     conn_.connected_ = false;
     ++conn_.errors_;
@@ -633,6 +633,32 @@ void QoreAmqpConnection::Handler::on_error(const proton::error_condition& ec) {
             conn_.connect_error_ = err;
         }
         conn_.connect_cv_.broadcast();
+    }
+}
+
+void QoreAmqpConnection::handlerFailed(const char* handler, const char* what) noexcept {
+    try {
+        std::string err = std::string(what) + " (in " + handler + ")";
+        connected_ = false;
+        ++errors_;
+        pushEvent("amqp-error", err);
+        {
+            std::lock_guard<std::mutex> lock(connect_mutex_);
+            if (connect_error_.empty()) {
+                connect_error_ = what;
+            }
+            connect_cv_.broadcast();
+        }
+        {
+            std::lock_guard<std::mutex> lock(recv_mutex_);
+            recv_cv_.broadcast();
+        }
+        {
+            std::lock_guard<std::mutex> lock(send_mutex_);
+            send_cv_.broadcast();
+        }
+    } catch (...) {
+        // nothing more can be recorded: the connecting thread still ends its wait at its timeout
     }
 }
 

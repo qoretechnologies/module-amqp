@@ -199,25 +199,90 @@ private:
     public:
         Handler(QoreAmqpConnection& conn) : conn_(conn) {}
 
-        void on_container_start(proton::container& c) override;
-        void on_connection_open(proton::connection& c) override;
-        void on_connection_close(proton::connection& c) override;
-        void on_connection_error(proton::connection& c) override;
-        void on_sender_open(proton::sender& s) override;
-        void on_sender_close(proton::sender& s) override;
-        void on_sender_error(proton::sender& s) override;
-        void on_receiver_open(proton::receiver& r) override;
-        void on_sendable(proton::sender& s) override;
-        void on_message(proton::delivery& d, proton::message& m) override;
-        void on_tracker_accept(proton::tracker& t) override;
-        void on_tracker_reject(proton::tracker& t) override;
-        void on_tracker_settle(proton::tracker& t) override;
-        void on_transport_error(proton::transport& t) override;
-        void on_error(const proton::error_condition& ec) override;
+        // Proton calls these from its event loop: an exception escaping them does not reach container::run() on
+        // every platform (with musl, on_container_start() is called through pthread_once(), which an exception
+        // cannot unwind through, and the process ends in std::terminate()), so each one runs its implementation
+        // through guard(), which records the exception as a connection error instead
+        void on_container_start(proton::container& c) override {
+            guard("on_container_start", [&]() { on_container_startImpl(c); });
+        }
+        void on_connection_open(proton::connection& c) override {
+            guard("on_connection_open", [&]() { on_connection_openImpl(c); });
+        }
+        void on_connection_close(proton::connection& c) override {
+            guard("on_connection_close", [&]() { on_connection_closeImpl(c); });
+        }
+        void on_connection_error(proton::connection& c) override {
+            guard("on_connection_error", [&]() { on_connection_errorImpl(c); });
+        }
+        void on_sender_open(proton::sender& s) override {
+            guard("on_sender_open", [&]() { on_sender_openImpl(s); });
+        }
+        void on_sender_close(proton::sender& s) override {
+            guard("on_sender_close", [&]() { on_sender_closeImpl(s); });
+        }
+        void on_sender_error(proton::sender& s) override {
+            guard("on_sender_error", [&]() { on_sender_errorImpl(s); });
+        }
+        void on_receiver_open(proton::receiver& r) override {
+            guard("on_receiver_open", [&]() { on_receiver_openImpl(r); });
+        }
+        void on_sendable(proton::sender& s) override {
+            guard("on_sendable", [&]() { on_sendableImpl(s); });
+        }
+        void on_message(proton::delivery& d, proton::message& m) override {
+            guard("on_message", [&]() { on_messageImpl(d, m); });
+        }
+        void on_tracker_accept(proton::tracker& t) override {
+            guard("on_tracker_accept", [&]() { on_tracker_acceptImpl(t); });
+        }
+        void on_tracker_reject(proton::tracker& t) override {
+            guard("on_tracker_reject", [&]() { on_tracker_rejectImpl(t); });
+        }
+        void on_tracker_settle(proton::tracker& t) override {
+            guard("on_tracker_settle", [&]() { on_tracker_settleImpl(t); });
+        }
+        void on_transport_error(proton::transport& t) override {
+            guard("on_transport_error", [&]() { on_transport_errorImpl(t); });
+        }
+        void on_error(const proton::error_condition& ec) override {
+            guard("on_error", [&]() { on_errorImpl(ec); });
+        }
 
     private:
         QoreAmqpConnection& conn_;
+
+        void on_container_startImpl(proton::container& c);
+        void on_connection_openImpl(proton::connection& c);
+        void on_connection_closeImpl(proton::connection& c);
+        void on_connection_errorImpl(proton::connection& c);
+        void on_sender_openImpl(proton::sender& s);
+        void on_sender_closeImpl(proton::sender& s);
+        void on_sender_errorImpl(proton::sender& s);
+        void on_receiver_openImpl(proton::receiver& r);
+        void on_sendableImpl(proton::sender& s);
+        void on_messageImpl(proton::delivery& d, proton::message& m);
+        void on_tracker_acceptImpl(proton::tracker& t);
+        void on_tracker_rejectImpl(proton::tracker& t);
+        void on_tracker_settleImpl(proton::tracker& t);
+        void on_transport_errorImpl(proton::transport& t);
+        void on_errorImpl(const proton::error_condition& ec);
+
+        //! Runs a handler's implementation, recording an exception that it throws as a connection error
+        template <typename F>
+        void guard(const char* handler, F f) noexcept {
+            try {
+                f();
+            } catch (const std::exception& e) {
+                conn_.handlerFailed(handler, e.what());
+            } catch (...) {
+                conn_.handlerFailed(handler, "unknown exception");
+            }
+        }
     };
+
+    //! Records an exception thrown in a proton event handler as a connection error; never throws
+    DLLLOCAL void handlerFailed(const char* handler, const char* what) noexcept;
 
     //! Ensure the connection is open, raising an exception if not
     DLLLOCAL bool checkConnected(ExceptionSink* xsink) const;
