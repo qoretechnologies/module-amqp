@@ -16,6 +16,7 @@ class AmqpTlsTest inherits QUnit::Test {
     constructor() : Test("AmqpTlsTest", "1.0") {
         addTestCase("TLS files respect sandbox", \testSandbox());
         addTestCase("TLS files respect PO_NO_FILESYSTEM", \testNoFilesystem());
+        addTestCase("TLS files and the network follow the system policy in a capability", \testCapability());
         if (!ENV.AMQP_TLS_TEST_URL || !ENV.AMQP_TLS_MTLS_URL || !ENV.AMQP_TLS_CA
                 || !ENV.AMQP_TLS_WRONG_CA || !ENV.AMQP_TLS_CLIENT_CERT || !ENV.AMQP_TLS_CLIENT_KEY) {
             addTestCase("TLS fixture dependency", sub() { testSkip("AMQP_TLS_* fixture not configured"); });
@@ -53,6 +54,48 @@ sub connectWithFiles(bool client) {
         assertThrows("FILESYSTEM-ACCESS-DENIED", sub() { p.callFunction("connectWithFiles", False); });
         assertThrows("FILESYSTEM-ACCESS-DENIED", sub() { p.callFunction("connectWithFiles", True); });
     }
+    testCapability() {
+        # the TLS files: a sandbox that denies the filesystem and allows the broker's address
+        SandboxManager fs();
+        fs.setFilesystemDefaultPolicy(False);
+        fs.addNetworkAllowedIPRange("127.0.0.1/32");
+        checkCapability(fs, "FILESYSTEM-ACCESS-DENIED", <AmqpSslOptions>{"ca_cert": "/qore-tls-test/ca.pem"});
+        # the network: a sandbox that denies it
+        SandboxManager net();
+        net.setNetworkDefaultPolicy(False);
+        checkCapability(net, "NETWORK-ACCESS-DENIED");
+    }
+
+    #! connects to a closed port directly from a sandbox, which denies it, then in a capability, which the sandbox
+    #! does not deny
+    private checkCapability(SandboxManager sm, string denied, *hash<AmqpSslOptions> ssl) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.loadModule("amqp");
+        p.setSandboxManager(sm);
+        p.parse("%modern\nauto sub through(code c) { return c(); }", "amqp-tls-capability");
+        code connect = sub () {
+            AmqpConnection conn(<AmqpConnectionOptions>{
+                "url": (ssl ? "amqps" : "amqp") + "://127.0.0.1:1",
+                "ssl": ssl,
+            });
+            conn.connect();
+        };
+        # the same code called directly from the sandbox inherits the sandbox's policy
+        assertThrows(denied, \p.callFunction(), ("through", connect),
+            "the connection called directly from the sandbox is denied");
+        # a system-policy capability called from the sandbox is subject to the system policy, not the sandbox's: it
+        # reaches the missing file or the closed port, not the sandbox
+        *hash<ExceptionInfo> error;
+        try {
+            p.callFunction("through", SandboxManager::createSystemPolicyCall(connect));
+        } catch (hash<ExceptionInfo> ex) {
+            error = ex;
+        }
+        assertTrue(exists error, "the connection to a closed port fails");
+        assertNeq(denied, error.err, "a connection in a system-policy capability is not denied by the sandbox: "
+            + error.desc);
+    }
+
     testNoFilesystem() {
         Program p = makeRestrictedProgram(PO_NO_FILESYSTEM);
         assertThrows("FILESYSTEM-ACCESS-DENIED", sub() { p.callFunction("connectWithFiles", False); });

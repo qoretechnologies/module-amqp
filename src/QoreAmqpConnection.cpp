@@ -830,7 +830,7 @@ void QoreAmqpConnection::connect(ExceptionSink* xsink) {
                 "reading AMQP TLS certificate files is not allowed when PO_NO_FILESYSTEM is set");
             return;
         }
-        QoreSandboxManagerHelper smh;
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
         if (smh) {
             for (const auto* path : {&ssl_ca_cert_, &ssl_client_cert_, &ssl_client_key_}) {
                 if (!path->empty() && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
@@ -995,7 +995,7 @@ bool QoreAmqpConnection::checkConnected(ExceptionSink* xsink) const {
 }
 
 bool QoreAmqpConnection::checkNetworkAccess(ExceptionSink* xsink) const {
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (!smh) {
         return true;
     }
