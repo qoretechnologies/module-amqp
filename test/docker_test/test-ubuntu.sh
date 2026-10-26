@@ -46,14 +46,22 @@ ${ARTEMIS_HOME}/bin/artemis create /tmp/amqp-broker \
 /tmp/amqp-broker/bin/artemis-service start
 export AMQP_TEST_URL="amqp://guest:guest@localhost:5672"
 
+broker_ready=
 # wait for broker to be ready
 for i in $(seq 1 30); do
     if /tmp/amqp-broker/bin/artemis check node --up 2>/dev/null; then
         echo "Broker is ready"
+        broker_ready=1
         break
     fi
     sleep 1
 done
+# the tests need the broker: without it they fail one by one with connection errors that hide the cause
+if [ -z "${broker_ready}" ]; then
+    echo "ERROR: the AMQP broker did not become ready" >&2
+    cat /tmp/amqp-broker/log/artemis.log 2>/dev/null | tail -50 >&2
+    exit 1
+fi
 
 # add Qore user and group
 groupadd -o -g ${QORE_GID} qore
