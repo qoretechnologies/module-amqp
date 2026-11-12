@@ -33,6 +33,9 @@ static void amqp_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void amqp_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
 static void amqp_module_delete();
 
+// the module's namespace; purged when the module is deleted (see QoreModuleInfo::ns)
+QoreNamespace AmqpNs("Qore::Amqp");
+
 extern "C" DLLEXPORT void amqp_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.name = "amqp";
     mod_info.version = "1.0.0";
@@ -44,6 +47,10 @@ extern "C" DLLEXPORT void amqp_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.init = amqp_module_init;
     mod_info.ns_init = amqp_module_ns_init;
     mod_info.del = amqp_module_delete;
+#ifdef QORE_HAS_MODULE_NS_PURGE
+    // the namespace is purged when the module is deleted, before the types are freed (see QoreModuleInfo::ns)
+    mod_info.ns = &AmqpNs;
+#endif
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }
@@ -60,8 +67,6 @@ const TypedHashDecl* hashdeclAmqpMessageProperties = nullptr;
 const TypedHashDecl* hashdeclAmqpAddressInfo = nullptr;
 const TypedHashDecl* hashdeclAmqpQueueInfo = nullptr;
 const TypedHashDecl* hashdeclAmqpConnectionStats = nullptr;
-
-QoreNamespace AmqpNs("Qore::Amqp");
 
 #ifdef DEBUG
 // debug builds only: methods that hold the Proton event thread, so that tests can cancel a thread waiting for work
