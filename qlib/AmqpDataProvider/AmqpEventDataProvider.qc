@@ -90,7 +90,7 @@ public class AmqpEventDataProvider inherits AbstractDataProvider, DelayedObserva
     }
 
     #! Returns the event types supported
-    *hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
+    hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
         return {
             EVENT_AMQP_MESSAGE: <DataProviderMessageInfo>{
                 "desc": "Fired when a message is received on the AMQP address",
