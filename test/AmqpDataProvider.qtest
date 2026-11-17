@@ -31,6 +31,7 @@
 %requires QUnit
 %requires amqp
 %requires AmqpUtil
+%requires DataProvider
 %requires ConnectionProvider
 %requires AmqpDataProvider
 
@@ -65,11 +66,148 @@ public class AmqpDataProviderTest inherits QUnit::Test {
             addTestCase("connection getDataProvider", \testConnectionGetDataProvider());
             addTestCase("provider with management", \testProviderWithManagement());
             addTestCase("missing url throws", \testMissingUrlThrows());
+            addTestCase("event provider accepts handled messages", \testEventAccept());
+            addTestCase("event provider redelivers refused messages", \testEventRefusal());
+            addTestCase("event provider rejects permanently refused messages", \testEventReject());
+            addTestCase("event provider stops during a back-off", \testEventStopDuringBackOff());
+            addTestCase("event provider stopped by an observer", \testEventStopFromObserver());
         } else {
             addTestCase("broker dependency", sub() { testSkip("AMQP_TEST_URL not set"); });
         }
 
         set_return_value(main());
+    }
+
+    #! Returns a connected client
+    private Amqp::AmqpClient getClient() {
+        Amqp::AmqpClient client(url);
+        client.connect();
+        return client;
+    }
+
+    #! Returns a connected client with a receiver of the address, which the event provider uses
+    /** The receiver is created before the messages are sent: the broker creates the address when it is first used,
+        and a message sent to it before it has a receiver is not kept
+    */
+    private Amqp::AmqpClient getReceivingClient(string addr) {
+        Amqp::AmqpClient client = getClient();
+        assertNothing(client.receive(addr, 1ms), "the address is empty");
+        return client;
+    }
+
+    #! Returns the next delivery from the queue, failing the test if none arrives in time
+    private hash<auto> getDelivery(Queue queue, string what) {
+        auto rv = queue.get(20s);
+        if (!exists rv) {
+            throw "AMQP-TEST-ERROR", sprintf("%s: no delivery within 20s", what);
+        }
+        return rv;
+    }
+
+    #! Returns a started event provider of the address with the given observer, and a short back-off
+    private AmqpEventDataProvider startEvents(Amqp::AmqpClient client, string addr, Observer obs) {
+        AmqpEventDataProvider evt(client, addr, 200, {"refusal_delay_ms": 10, "max_refusal_delay_ms": 50});
+        evt.registerObserver(obs);
+        evt.observersReady();
+        return evt;
+    }
+
+    #! A message that every observer accepts is accepted once (qore#6396)
+    testEventAccept() {
+        string addr = getUniqueAddress();
+        Amqp::AmqpClient client = getReceivingClient(addr);
+        {
+            on_exit client.close();
+            client.send(addr, "a1");
+            client.send(addr, "a2");
+            Queue deliveries();
+            AmqpTestRefusingObserver obs(deliveries);
+            AmqpEventDataProvider evt = startEvents(client, addr, obs);
+            on_exit evt.stopEvents();
+            assertEq(("a1", "a2"), (map getDelivery(deliveries, "delivery " + $1).body, xrange(2)));
+            # stopEvents() waits for the receive loop to end: every delivery is settled once
+            evt.stopEvents();
+            assertEq({"accepted": 2, "refused": 0, "rejected": 0, "settle_errors": 0}, evt.getDeliveryStats());
+        }
+    }
+
+    #! A refused message is delivered again and accepted then (qore#6396)
+    testEventRefusal() {
+        string addr = getUniqueAddress();
+        Amqp::AmqpClient client = getReceivingClient(addr);
+        {
+            on_exit client.close();
+            client.send(addr, "r1");
+            Queue deliveries();
+            AmqpTestRefusingObserver obs(deliveries, "r1", 2);
+            AmqpEventDataProvider evt = startEvents(client, addr, obs);
+            on_exit evt.stopEvents();
+            list<hash<auto>> seen = map getDelivery(deliveries, "delivery " + $1), xrange(3);
+            assertEq(("r1", "r1", "r1"), (map $1.body, seen), "the refused message is delivered again");
+            assertEq((True, True, False), (map $1.refused, seen));
+            evt.stopEvents();
+            assertEq({"accepted": 1, "refused": 2, "rejected": 0, "settle_errors": 0}, evt.getDeliveryStats());
+        }
+    }
+
+    #! A message that every failing observer refuses permanently is rejected and not delivered again (qore#6396)
+    testEventReject() {
+        string addr = getUniqueAddress();
+        Amqp::AmqpClient client = getReceivingClient(addr);
+        {
+            on_exit client.close();
+            client.send(addr, "p1");
+            client.send(addr, "p2");
+            Queue deliveries();
+            AmqpTestRefusingObserver obs(deliveries, "p1", -1, True);
+            AmqpEventDataProvider evt = startEvents(client, addr, obs);
+            on_exit evt.stopEvents();
+            list<hash<auto>> seen = map getDelivery(deliveries, "delivery " + $1), xrange(2);
+            assertEq(("p1", "p2"), (map $1.body, seen));
+            # a sentinel sent after p2 arrives after a redelivery of p1, if there was one
+            client.send(addr, "p3");
+            hash<auto> next = getDelivery(deliveries, "the sentinel");
+            assertEq("p3", next.body, "the rejected message is not delivered again");
+            evt.stopEvents();
+            assertEq({"accepted": 2, "refused": 0, "rejected": 1, "settle_errors": 0}, evt.getDeliveryStats());
+        }
+    }
+
+    #! A stop request ends the back-off of a refusal at once, and the refused message is still settled
+    testEventStopDuringBackOff() {
+        string addr = getUniqueAddress();
+        Amqp::AmqpClient client = getReceivingClient(addr);
+        on_exit client.close();
+        client.send(addr, "s1");
+        Queue deliveries();
+        AmqpTestRefusingObserver obs(deliveries, "s1", -1);
+        AmqpEventDataProvider evt(client, addr, 200, {"refusal_delay_ms": 600000, "max_refusal_delay_ms": 600000});
+        evt.registerObserver(obs);
+        evt.observersReady();
+        on_exit evt.stopEvents();
+        assertTrue(getDelivery(deliveries, "s1").refused);
+        date start = now_us();
+        evt.stopEvents();
+        assertLt(30s, now_us() - start, "the stop does not wait for the back-off");
+        assertEq({"accepted": 0, "refused": 1, "rejected": 0, "settle_errors": 0}, evt.getDeliveryStats());
+    }
+
+    #! An observer can stop the provider from the receive loop without waiting for the loop itself
+    testEventStopFromObserver() {
+        string addr = getUniqueAddress();
+        Amqp::AmqpClient client = getReceivingClient(addr);
+        on_exit client.close();
+        client.send(addr, "x1");
+        Queue deliveries();
+        AmqpEventDataProvider evt(client, addr, 200);
+        AmqpTestStoppingObserver obs(deliveries, evt);
+        evt.registerObserver(obs);
+        evt.observersReady();
+        on_exit evt.stopEvents();
+        assertEq("x1", getDelivery(deliveries, "x1").body);
+        # the loop ends after settling the message
+        evt.stopEvents();
+        assertEq({"accepted": 1, "refused": 0, "rejected": 0, "settle_errors": 0}, evt.getDeliveryStats());
     }
 
     private string getUniqueAddress() {
@@ -295,5 +433,59 @@ public class AmqpDataProviderTest inherits QUnit::Test {
         assertThrows("CONSTRUCTOR-ERROR", sub() {
             AmqpDataProvider provider({});
         });
+    }
+}
+
+#! Records every delivery and refuses the deliveries of one body a number of times
+class AmqpTestRefusingObserver inherits Observer {
+    private {
+        Queue queue;
+        *string refuse_body;
+        #! the number of deliveries of the body to refuse; -1 refuses every one
+        int refusals;
+        #! True to refuse permanently
+        bool permanent;
+    }
+
+    constructor(Queue queue, *string refuse_body, int refusals = 0, bool permanent = False) {
+        self.queue = queue;
+        self.refuse_body = refuse_body;
+        self.refusals = refusals;
+        self.permanent = permanent;
+    }
+
+    update(string event_id, hash<auto> data) {
+        if (event_id != EVENT_AMQP_MESSAGE) {
+            return;
+        }
+        bool refuse = exists refuse_body && data.body == refuse_body && refusals != 0;
+        queue.push({"body": data.body, "refused": refuse});
+        if (refuse) {
+            if (refusals > 0) {
+                --refusals;
+            }
+            throw permanent ? AMQP_MESSAGE_REJECTED_ERR : "AMQP-TEST-REFUSAL", sprintf("refusing %y", data.body);
+        }
+    }
+}
+
+#! Stops the provider from the receive loop when it gets a message
+class AmqpTestStoppingObserver inherits Observer {
+    private {
+        Queue queue;
+        AmqpEventDataProvider evt;
+    }
+
+    constructor(Queue queue, AmqpEventDataProvider evt) {
+        self.queue = queue;
+        self.evt = evt;
+    }
+
+    update(string event_id, hash<auto> data) {
+        if (event_id != EVENT_AMQP_MESSAGE) {
+            return;
+        }
+        evt.stopEvents();
+        queue.push({"body": data.body});
     }
 }

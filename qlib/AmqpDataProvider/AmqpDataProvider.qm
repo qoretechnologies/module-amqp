@@ -255,6 +255,9 @@ module AmqpDataProvider {
     @ref AmqpDataProvider::AmqpMessageEventDataType. Register observers before calling
     @ref AmqpDataProvider::AmqpEventDataProvider::observersReady() "observersReady()" and call
     @ref AmqpDataProvider::AmqpEventDataProvider::stopEvents() "stopEvents()" before closing the shared client.
+    Each delivery is settled after the observers have handled it: accepted, delivered again after a refusal, or
+    rejected when the observers refuse it permanently with @ref AmqpDataProvider::AMQP_MESSAGE_REJECTED_ERR (see
+    @ref amqpeventdataprovider_settlement).
 */
 
 /** @page amqpdataprovidercookbook Messaging Cookbook
