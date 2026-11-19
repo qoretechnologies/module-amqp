@@ -172,6 +172,10 @@ module AmqpDataProvider {
     - Use plaintext or TLS connections through the \c amqp:// and \c amqps:// schemes
 
     @anchor amqpdataprovider_classes
+
+    @par Connection options
+    Connection option labels and descriptions are localized in all twelve standard locales.
+
     @section amqpdataproviderapi API Overview
 
     |!Class|!Purpose
@@ -341,10 +345,9 @@ qdp 'amqp{url=amqp://guest:guest@localhost:5672,use_management=true}' children
     @endverbatim
 */
 
-/** @page amqpdataproviderreleasenotes Release Notes
+/** @page amqpdataproviderreleasenotes AmqpDataProvider Release Notes
 
     @section amqpdataprovider_v1_0 AmqpDataProvider Module Version 1.0
-    - added source-owned connection presentation catalogs in all twelve standard locales
     - initial release
 */
 
