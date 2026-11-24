@@ -70,6 +70,7 @@ public class AmqpEventDataProvider inherits AbstractDataProvider, DelayedObserva
         const ProviderInfo = <DataProviderInfo>{
             "type": "AmqpEventDataProvider",
             "supports_observable": True,
+            "supports_refusal_redelivery": True,
         };
     }
 

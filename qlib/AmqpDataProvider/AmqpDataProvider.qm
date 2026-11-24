@@ -26,7 +26,7 @@
 %modern
 %allow-weak-references
 
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.13
 %requires(reexport) ConnectionProvider
 %requires amqp
 %requires AmqpUtil
