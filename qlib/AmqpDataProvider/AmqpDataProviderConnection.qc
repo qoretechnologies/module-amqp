@@ -30,6 +30,13 @@ public namespace AmqpDataProvider {
 
 */
 public class AmqpDataProviderConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! Returns the functional domains of the connection's clients (qoretechnologies/qore#7093)
+    /** The clients connect to an AMQP broker
+    */
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     public {
         #! Connection scheme info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("AmqpDataProvider",
