@@ -25,6 +25,26 @@
     Certificate and key files are checked against the caller's filesystem
     sandbox before the connection thread reads them.
 
+    @subsection amqp_caller_paths Paths Given by Restricted Callers
+
+    The module's code runs with its own %Program's options, so it decides with
+    the restrictions of the code that creates a connection before it uses the
+    files that the \c ssl options name (\c ca_cert, \c client_cert and
+    \c client_key): if that code is restricted from the \c FILESYSTEM
+    functional domain (for example with \c PO_NO_FILESYSTEM), the
+    @ref Qore::Amqp::AmqpConnection "AmqpConnection" constructor raises
+    \c PERMISSION-DENIED before any file is read or the broker is connected to;
+    any value that is set is checked, also an empty string.  This also applies
+    when the code creates the connection through
+    @ref Amqp::AmqpClient "AmqpClient".  The options are given when the
+    connection is created, so the creating code is judged (see
+    @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()"):
+    a connection that the host created and gave to restricted code keeps the
+    files that the host configured.  The file-system policy of a sandbox that
+    governs the code that connects is checked when the connection is opened
+    (\c FILESYSTEM-ACCESS-DENIED), also for a connection that the host lent.  The connection options of the data provider
+    and the connection scheme of the module name no files.
+
     Server certificate and hostname verification are enabled by default.
     Setting \c verify to \c False disables both checks. See
     @ref Qore::Amqp::AmqpSslOptions "AmqpSslOptions" for the complete options.
