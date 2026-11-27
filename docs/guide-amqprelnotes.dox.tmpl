@@ -6,4 +6,8 @@
 
     @section amqp_v1_0 amqp Module Version 1.0
     - initial release
+    - the TLS certificate and key files of the \c ssl options are refused with \c PERMISSION-DENIED when the
+      connection is created if the creating code is restricted from the file system, also when it creates the
+      connection through module code such as @ref Amqp::AmqpClient "AmqpClient" (see @ref amqp_caller_paths,
+      <a href="https://github.com/qoretechnologies/module-amqp/issues/10">issue 10</a>)
 */

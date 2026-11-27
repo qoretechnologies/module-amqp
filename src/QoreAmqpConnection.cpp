@@ -742,6 +742,17 @@ QoreAmqpConnection::QoreAmqpConnection(const QoreHashNode* options, ExceptionSin
     if (!v.isNullOrNothing()) {
         const QoreHashNode* ssl = v.get<const QoreHashNode>();
         if (ssl) {
+            // the certificate and key files are the creating code's input, which the connection thread reads later:
+            // refused here, before anything is read or connected to, if that code is restricted from the file system
+            // (issue #10); any value that is set is checked, also an empty string.  The creating code is judged, so
+            // a connection that the host created keeps the host's files when it is lent to restricted code.
+            for (const char* key : {"ca_cert", "client_cert", "client_key"}) {
+                if (ssl->getKeyValue(key).getType() == NT_STRING && qore_caller_restricts_domain(QDOM_FILESYSTEM)) {
+                    xsink->raiseException("PERMISSION-DENIED", "the 'ssl.%s' option cannot be used: the calling code "
+                        "is restricted from the FILESYSTEM functional domain", key);
+                    return;
+                }
+            }
             QoreValue sv = ssl->getKeyValue("ca_cert");
             if (!sv.isNullOrNothing()) {
                 if (sv.getType() == NT_STRING) {
@@ -850,12 +861,8 @@ void QoreAmqpConnection::connect(ExceptionSink* xsink) {
                 "TLS client_cert and client_key must be supplied together");
             return;
         }
-        if ((!ssl_ca_cert_.empty() || !ssl_client_cert_.empty())
-                && getProgram() && (getProgram()->getParseOptions() & PO_NO_FILESYSTEM)) {
-            xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
-                "reading AMQP TLS certificate files is not allowed when PO_NO_FILESYSTEM is set");
-            return;
-        }
+        // the restrictions of the code that created the connection were checked when it gave the files (in the
+        // constructor); the file-system policy of a sandbox that governs the code that connects applies here
         QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
         if (smh) {
             for (const auto* path : {&ssl_ca_cert_, &ssl_client_cert_, &ssl_client_key_}) {
