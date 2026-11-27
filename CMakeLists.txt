@@ -24,7 +24,7 @@ if (UNIX AND NOT APPLE)
 endif()
 
 set(QORE_DOXYGEN_MODULES DataProvider ConnectionProvider)
-find_package(Qore 2.0 REQUIRED)
+find_package(Qore 3.0 REQUIRED)
 
 # Find Qpid Proton C++ library
 # Try pkg-config first, then fall back to find_library
