@@ -8,7 +8,7 @@
           "message": "Odešle zprávu na zadanou adresu AMQP (frontu nebo téma).\n\n**Tělo** zprávy je povinné a může být libovolného typu — řetězec, strukturovaná data (haš/seznam), binární nebo skalární hodnota. Použijte `content_type` k určení formátu (např. `application/json`).\n\n**Běžné scénáře**:\n- Odeslání události objednávky: `{\"order_id\": 123, \"total\": 49.99}` s `content_type: application/json`\n- Odeslání oznámení: `\"Low inventory alert\"` s `subject: alerts.inventory`\n- Odeslání binárního obsahu: neopracovaná data souboru s `content_type: application/octet-stream`\n\nOdpověď udává, zda broker zprávu **přijal**."
         },
         "app.QU1RUA.action.c2VuZA.display_name": {
-          "source": "Send Message",
+          "source": "Send message",
           "message": "Odeslat zprávu"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ.desc": {
@@ -64,7 +64,7 @@
           "message": "Tělo zprávy v čistém textu"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
-          "source": "Plain Text",
+          "source": "Plain text",
           "message": "Čistý text"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Typ obsahu MIME popisující formát těla zprávy.\n\nJeho nastavení pomáhá příjemcům vědět, jak zprávu interpretovat. Běžné hodnoty zahrnují `text/plain` pro jednoduchý text, `application/json` pro strukturovaná data a `application/octet-stream` pro binární obsah."
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.display_name": {
-          "source": "Content Type",
+          "source": "Content type",
           "message": "Typ obsahu"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.short_desc": {
@@ -100,7 +100,7 @@
           "message": "Adresa AMQP (název fronty nebo tématu), na kterou bude zpráva publikována.\n\nZprávy odeslané do **fronty** jsou doručeny jedinému spotřebiteli (point-to-point). Zprávy odeslané do **tématu** jsou doručeny všem odběratelům (publish-subscribe)."
         },
         "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.display_name": {
-          "source": "AMQP Address",
+          "source": "AMQP address",
           "message": "Adresa AMQP"
         },
         "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.short_desc": {
@@ -112,7 +112,7 @@
           "message": "Haš vlastních vlastností typu klíč-hodnota připojených ke zprávě.\n\nPoužijte aplikační vlastnosti k přidání specifických obchodních metadat, jako jsou ID zákazníků, úrovně priority nebo příznaky zpracování. Tyto vlastnosti mohou spotřebitelé použít k filtrování a směrování."
         },
         "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.display_name": {
-          "source": "Application Properties",
+          "source": "Application properties",
           "message": "Aplikační vlastnosti"
         },
         "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Tělo zprávy, které má být odesláno na adresu AMQP.\n\nMůže být libovolného serializovatelného typu:\n- **String**: čistý text nebo kódovaná data (JSON, XML, YAML)\n- **Hash**: strukturovaná data (automaticky kódovaná jako mapa AMQP)\n- **List**: uspořádaná kolekce\n- **Binary**: surová binární data\n- **Integer, float, boolean, date**: skalární hodnoty"
         },
         "app.QU1RUA.action.c2VuZA.option.Ym9keQ.display_name": {
-          "source": "Message Body",
+          "source": "Message body",
           "message": "Tělo zprávy"
         },
         "app.QU1RUA.action.c2VuZA.option.Ym9keQ.short_desc": {
@@ -160,7 +160,7 @@
           "message": "Adresa AMQP, na kterou by měly být odeslány odpovědi na tuto zprávu.\n\nPoužívá se ve vzorech požadavek–odpověď k sdělení příjemci, kam má odeslat odpověď."
         },
         "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.display_name": {
-          "source": "Reply-To Address",
+          "source": "Reply-to address",
           "message": "Adresa pro odpověď"
         },
         "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.short_desc": {
@@ -176,7 +176,7 @@
           "message": "Sleduje příchozí zprávy na zadané adrese AMQP a vyvolá událost pro každou přijatou zprávu.\n\nKaždá událost obsahuje `body`, `content_type`, `message_id`, `correlation_id`, `reply_to`, `subject` zprávy a jakékoli vlastní `application_properties` nastavené odesílatelem.\n\n**Použijte k**:\n- Zpracování objednávek tak, jak přicházejí do fronty\n- Reakci na oznámení z tématu\n- Spuštění pracovních postupů při přijetí integračních zpráv"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.display_name": {
-          "source": "Receive Messages",
+          "source": "Receive messages",
           "message": "Přijímat zprávy"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.desc": {
@@ -184,7 +184,7 @@
           "message": "Adresa AMQP (název fronty nebo tématu), na které se má naslouchat příchozím zprávám.\n\nZprávy jsou doručovány jako událost, kdykoli dorazí na tuto adresu."
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.display_name": {
-          "source": "AMQP Address",
+          "source": "AMQP address",
           "message": "Adresa AMQP"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.short_desc": {

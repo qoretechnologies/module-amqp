@@ -28,7 +28,7 @@
           "message": "Tempo massimo in millisecondi per attendere le operazioni AMQP.\n\nAumentare per reti ad alta latenza o broker molto carichi."
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.display_name": {
-          "source": "Operation Timeout",
+          "source": "Operation timeout",
           "message": "Timeout dell'operazione"
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.short_desc": {
@@ -56,7 +56,7 @@
           "message": "Quando abilitato, esegue una query sul broker tramite il protocollo di gestione AMQP per scoprire automaticamente gli indirizzi disponibili.\n\n**Nota:** non tutti i broker supportano questo protocollo."
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.display_name": {
-          "source": "Auto-Discover Addresses",
+          "source": "Auto-discover addresses",
           "message": "Scopri automaticamente gli indirizzi"
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.short_desc": {

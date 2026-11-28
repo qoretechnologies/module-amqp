@@ -78,7 +78,7 @@ module AmqpDataProvider {
             "path": "/{address}",
             "path_vars": {
                 "address": <DataProviderPathVarInfo>{
-                    "display_name": "AMQP Address",
+                    "display_name": "AMQP address",
                     "short_desc": "The queue or topic to send to",
                     "desc": "The AMQP address (queue or topic name) where the message "
                         "will be published.\n\n"
@@ -89,7 +89,7 @@ module AmqpDataProvider {
                 },
             },
             "action": "send",
-            "display_name": "Send Message",
+            "display_name": "Send message",
             "short_desc": "Publish a message to an AMQP queue or topic",
             "desc": "Sends a message to the specified AMQP address (queue or topic).\n\n"
                 "The message **body** is required and can be any type — a string, "
@@ -123,7 +123,7 @@ module AmqpDataProvider {
             "path": "/{address}/events",
             "path_vars": {
                 "address": <DataProviderPathVarInfo>{
-                    "display_name": "AMQP Address",
+                    "display_name": "AMQP address",
                     "short_desc": "The queue or topic to receive from",
                     "desc": "The AMQP address (queue or topic name) to listen on for "
                         "incoming messages.\n\n"
@@ -133,7 +133,7 @@ module AmqpDataProvider {
                 },
             },
             "action": "receive",
-            "display_name": "Receive Messages",
+            "display_name": "Receive messages",
             "short_desc": "Listen for incoming messages on an AMQP address",
             "desc": "Observes incoming messages on the specified AMQP address and fires "
                 "an event for each message received.\n\n"

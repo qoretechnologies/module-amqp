@@ -68,7 +68,7 @@ public class AmqpDataProviderConnection inherits ConnectionProvider::AbstractCon
                     "example_value": "orders,notifications",
                 },
                 "use_management": <ConnectionOptionInfo>{
-                    "display_name": "Auto-Discover Addresses",
+                    "display_name": "Auto-discover addresses",
                     "short_desc": "Query the broker for available addresses",
                     "type": "bool",
                     "desc": "When enabled, queries the broker via the AMQP Management "
@@ -89,7 +89,7 @@ public class AmqpDataProviderConnection inherits ConnectionProvider::AbstractCon
                     ),
                 },
                 "timeout_ms": <ConnectionOptionInfo>{
-                    "display_name": "Operation Timeout",
+                    "display_name": "Operation timeout",
                     "short_desc": "Timeout for AMQP operations in milliseconds",
                     "type": "int",
                     "desc": "Maximum time in milliseconds to wait for AMQP operations.\n\n"

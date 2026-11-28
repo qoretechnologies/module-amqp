@@ -28,7 +28,7 @@
           "message": "AMQP 작업을 대기하는 최대 시간(밀리초 단위).\n\n고지연 네트워크 또는 과부하된 브로커의 경우 증가시킵니다."
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.display_name": {
-          "source": "Operation Timeout",
+          "source": "Operation timeout",
           "message": "작업 시간 초과"
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.short_desc": {
@@ -56,7 +56,7 @@
           "message": "활성화되면 AMQP 관리 프로토콜을 통해 브로커에 쿼리하여 사용 가능한 주소를 자동으로 탐지합니다.\n\n**참고:** 모든 브로커가 이 프로토콜을 지원하는 것은 아닙니다."
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.display_name": {
-          "source": "Auto-Discover Addresses",
+          "source": "Auto-discover addresses",
           "message": "주소 자동 탐지"
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.short_desc": {
