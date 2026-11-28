@@ -8,7 +8,7 @@
           "message": "指定された AMQP アドレス（キューまたはトピック）にメッセージを送信します。\n\nメッセージの **body** は必須で、文字列、構造化データ（ハッシュ/リスト）、バイナリ、スカラ値など、任意の型を使用できます。フォーマットを示すには `content_type` を使用します（例: `application/json`）。\n\n**一般的なシナリオ**:\n- 注文イベントの送信: `content_type: application/json` を指定した `{\"order_id\": 123, \"total\": 49.99}`\n- 通知の送信: `subject: alerts.inventory` を指定した `\"Low inventory alert\"`\n- バイナリペイロードの送信: `content_type: application/octet-stream` を指定した生のファイルデータ\n\nレスポンスは、ブローカーがメッセージを**受理（accepted）**したかどうかを示します。"
         },
         "app.QU1RUA.action.c2VuZA.display_name": {
-          "source": "Send Message",
+          "source": "Send message",
           "message": "メッセージを送信"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ.desc": {
@@ -64,7 +64,7 @@
           "message": "プレーンテキストメッセージボディ"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
-          "source": "Plain Text",
+          "source": "Plain text",
           "message": "プレーンテキスト"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
@@ -76,7 +76,7 @@
           "message": "メッセージボディのフォーマットを説明する MIME コンテンツタイプです。\n\nこれを設定すると、コンシューマーがメッセージの解釈方法を把握しやすくなります。一般的な値には、シンプルなテキスト用の `text/plain`、構造化データ用の `application/json`、バイナリペイロード用の `application/octet-stream` などがあります。"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.display_name": {
-          "source": "Content Type",
+          "source": "Content type",
           "message": "コンテンツタイプ"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.short_desc": {
@@ -100,7 +100,7 @@
           "message": "メッセージが公開される AMQP アドレス（キューまたはトピック名）。\n\n**キュー**に送信されたメッセージは、単一のコンシューマーに配信されます（ポイントツーポイント）。**トピック**に送信されたメッセージは、すべてのサブスクライバーに配信されます（パブリッシュ/サブスクライブ）。"
         },
         "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.display_name": {
-          "source": "AMQP Address",
+          "source": "AMQP address",
           "message": "AMQP アドレス"
         },
         "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.short_desc": {
@@ -112,7 +112,7 @@
           "message": "メッセージに添付されるカスタムキー/値プロパティのハッシュ。\n\nアプリケーションプロパティを使用して、顧客 ID、優先度レベル、処理フラグなどのビジネス固有のメタデータを追加します。これらのプロパティは、コンシューマーによるフィルタリングやルーティングに使用できます。"
         },
         "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.display_name": {
-          "source": "Application Properties",
+          "source": "Application properties",
           "message": "アプリケーションプロパティ"
         },
         "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.short_desc": {
@@ -124,7 +124,7 @@
           "message": "AMQP アドレスに送信するメッセージボディ。\n\nシリアライズ可能な任意の型を指定できます:\n- **文字列**: プレーンテキストまたはエンコード済みデータ（JSON、XML、YAML）\n- **ハッシュ**: 構造化データ（AMQP マップとして自動エンコード）\n- **リスト**: 順序付きコレクション\n- **バイナリ**: 生のバイナリデータ\n- **整数、浮動小数点数、ブール値、日付**: スカラ値"
         },
         "app.QU1RUA.action.c2VuZA.option.Ym9keQ.display_name": {
-          "source": "Message Body",
+          "source": "Message body",
           "message": "メッセージボディ"
         },
         "app.QU1RUA.action.c2VuZA.option.Ym9keQ.short_desc": {
@@ -160,7 +160,7 @@
           "message": "このメッセージへの返信を送信する AMQP アドレス。\n\nリクエスト/レプライパターンで、応答の送信先を受信者に伝えるために使用されます。"
         },
         "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.display_name": {
-          "source": "Reply-To Address",
+          "source": "Reply-to address",
           "message": "返信先アドレス"
         },
         "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.short_desc": {
@@ -176,7 +176,7 @@
           "message": "指定された AMQP アドレスで着信メッセージを監視し、受信した各メッセージに対してイベントを発生させます。\n\n各イベントにはメッセージの `body`、`content_type`、`message_id`、`correlation_id`、`reply_to`、`subject`、および送信者によって設定されたカスタム `application_properties` が含まれます。\n\n**用途**:\n- キューに届いた注文を順次処理\n- トピックからの通知に応答\n- 統合メッセージ受信時のワークフロー起動"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.display_name": {
-          "source": "Receive Messages",
+          "source": "Receive messages",
           "message": "メッセージを受信"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.desc": {
@@ -184,7 +184,7 @@
           "message": "着信メッセージを監視する AMQP アドレス（キューまたはトピック名）。\n\nこのアドレスにメッセージが届くたびに、イベントとして配信されます。"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.display_name": {
-          "source": "AMQP Address",
+          "source": "AMQP address",
           "message": "AMQP アドレス"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.short_desc": {

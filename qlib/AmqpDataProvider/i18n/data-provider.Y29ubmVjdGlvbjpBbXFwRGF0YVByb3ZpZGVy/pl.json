@@ -28,7 +28,7 @@
           "message": "Maksymalny czas w milisekundach oczekiwania na operacje AMQP.\n\nZwiększ dla sieci o wysokim opóźnieniu lub bardzo obciążonych brokera."
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.display_name": {
-          "source": "Operation Timeout",
+          "source": "Operation timeout",
           "message": "Limit czasu operacji"
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.short_desc": {
@@ -56,7 +56,7 @@
           "message": "Po włączeniu, zapytanie o brokera przez protokół AMQP Management, aby automatycznie odkryć dostępne adresy.\n\n**Uwaga:** nie wszystkie brokery obsługują ten protokół."
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.display_name": {
-          "source": "Auto-Discover Addresses",
+          "source": "Auto-discover addresses",
           "message": "Automatyczne odkrywanie adresów"
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.short_desc": {

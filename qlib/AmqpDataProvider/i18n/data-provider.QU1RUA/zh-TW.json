@@ -8,7 +8,7 @@
           "message": "傳送訊息至指定的 AMQP 位址（佇列或主題）。\n\n訊息**內容**（body）為必填，且可以是任何類型 — 字串、結構化資料（雜湊/列表）、二進位或純量值。使用 `content_type` 來指示格式（例如：`application/json`）。\n\n**常見情境**：\n- 傳送訂單事件：`{\"order_id\": 123, \"total\": 49.99}` 搭配 `content_type: application/json`\n- 傳送通知：`\"Low inventory alert\"` 搭配 `subject: alerts.inventory`\n- 傳送二進位內容：原始檔案資料搭配 `content_type: application/octet-stream`\n\n回應會指示代理程式（broker）是否已**接受**該訊息。"
         },
         "app.QU1RUA.action.c2VuZA.display_name": {
-          "source": "Send Message",
+          "source": "Send message",
           "message": "傳送訊息"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ.desc": {
@@ -64,7 +64,7 @@
           "message": "純文字訊息內文"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
-          "source": "Plain Text",
+          "source": "Plain text",
           "message": "純文字"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
@@ -76,7 +76,7 @@
           "message": "描述訊息內文格式的 MIME 內容類型。\n\n設定此項有助於消費者了解如何解析訊息。常見值包括用於簡單文字的 `text/plain`、用於結構化資料的 `application/json`，以及用於二進位內容的 `application/octet-stream`。"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.display_name": {
-          "source": "Content Type",
+          "source": "Content type",
           "message": "內容類型"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.short_desc": {
@@ -100,7 +100,7 @@
           "message": "將發布訊息的 AMQP 位址（佇列或主題名稱）。\n\n傳送到**佇列**的訊息會交付給單一消費者（點對點）。傳送到**主題**的訊息會交付給所有訂閱者（發布-訂閱）。"
         },
         "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.display_name": {
-          "source": "AMQP Address",
+          "source": "AMQP address",
           "message": "AMQP 位址"
         },
         "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.short_desc": {
@@ -112,7 +112,7 @@
           "message": "附加至訊息的自訂鍵值屬性雜湊。\n\n使用應用程式屬性來新增特定業務的中繼資料，例如客戶 ID、優先等級或處理標記。消費者可以使用這些屬性進行篩選和路由。"
         },
         "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.display_name": {
-          "source": "Application Properties",
+          "source": "Application properties",
           "message": "應用程式屬性"
         },
         "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.short_desc": {
@@ -124,7 +124,7 @@
           "message": "要傳送至 AMQP 位址的訊息內文。\n\n可以是任何可序列化類型：\n- **String**：純文字或編碼資料 (JSON, XML, YAML)\n- **Hash**：結構化資料（自動編碼為 AMQP map）\n- **List**：有順序的集合\n- **Binary**：原始二進位資料\n- **Integer, float, boolean, date**：純量值"
         },
         "app.QU1RUA.action.c2VuZA.option.Ym9keQ.display_name": {
-          "source": "Message Body",
+          "source": "Message body",
           "message": "訊息內文"
         },
         "app.QU1RUA.action.c2VuZA.option.Ym9keQ.short_desc": {
@@ -160,7 +160,7 @@
           "message": "此訊息的回覆應傳送到的 AMQP 位址。\n\n用於請求-回覆模式中，告知接收者將回應傳送至何處。"
         },
         "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.display_name": {
-          "source": "Reply-To Address",
+          "source": "Reply-to address",
           "message": "Reply-To 位址"
         },
         "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.short_desc": {
@@ -176,7 +176,7 @@
           "message": "監聽指定 AMQP 位址上的傳入訊息，並為接收到的每則訊息觸發事件。\n\n每個事件包含訊息 `body`、`content_type`、`message_id`、`correlation_id`、`reply_to`、`subject`，以及傳送者設定的任何自訂 `application_properties`。\n\n**用於**：\n- 當佇列收到訂單時進行處理\n- 對來自主題的通知做出反應\n- 在收到整合訊息時觸發工作流程"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.display_name": {
-          "source": "Receive Messages",
+          "source": "Receive messages",
           "message": "接收訊息"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.desc": {
@@ -184,7 +184,7 @@
           "message": "用來監聽傳入訊息的 AMQP 位址（佇列或主題名稱）。\n\n每當訊息到達此位址時，都會以事件形式交付。"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.display_name": {
-          "source": "AMQP Address",
+          "source": "AMQP address",
           "message": "AMQP 位址"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.short_desc": {

@@ -10,4 +10,9 @@
       connection is created if the creating code is restricted from the file system, also when it creates the
       connection through module code such as @ref Amqp::AmqpClient "AmqpClient" (see @ref amqp_caller_paths,
       <a href="https://github.com/qoretechnologies/module-amqp/issues/10">issue 10</a>)
+    - @ref AmqpDataProvider::AmqpEventDataProvider "AmqpEventDataProvider" reports
+      \c supports_refusal_redelivery in its provider info, as a message that an observer refuses is delivered again
+      (<a href="https://github.com/qoretechnologies/qore/issues/7560">qore#7560</a>)
+    - the module's action, option and field names are in sentence case
+      (<a href="https://github.com/qoretechnologies/qore/issues/7749">qore#7749</a>)
 */

@@ -28,7 +28,7 @@
           "message": "Максимальний час очікування в мілісекундах для операцій AMQP.\n\nЗбільште для мереж з високою затримкою або перенавантажених брокерів."
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.display_name": {
-          "source": "Operation Timeout",
+          "source": "Operation timeout",
           "message": "Час очікування операції"
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.short_desc": {
@@ -56,7 +56,7 @@
           "message": "При включенні, запитує брокер через протокол AMQP Management для автоматичного виявлення доступних адрес.\n\n**Примітка:** не всі брокери підтримують цей протокол."
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.display_name": {
-          "source": "Auto-Discover Addresses",
+          "source": "Auto-discover addresses",
           "message": "Автоматичне виявлення адрес"
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.short_desc": {

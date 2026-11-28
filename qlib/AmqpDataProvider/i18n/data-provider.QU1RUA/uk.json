@@ -8,7 +8,7 @@
           "message": "Надсилає повідомлення на вказану адресу AMQP (чергу або тему).\n\nТіло повідомлення (**body**) є обов'язковим і може бути будь-якого типу — рядок, структуровані дані (хеш/список), бінарні дані або скалярне значення. Використовуйте `content_type`, щоб вказати формат (наприклад, `application/json`).\n\n**Типові сценарії**:\n- Надіслати подію замовлення: `{\"order_id\": 123, \"total\": 49.99}` з `content_type: application/json`\n- Надіслати сповіщення: `\"Low inventory alert\"` з `subject: alerts.inventory`\n- Надіслати бінарне корисне навантаження: сирі дані файлу з `content_type: application/octet-stream`\n\nВідповідь вказує, чи брокер **прийняв** повідомлення."
         },
         "app.QU1RUA.action.c2VuZA.display_name": {
-          "source": "Send Message",
+          "source": "Send message",
           "message": "Надіслати повідомлення"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ.desc": {
@@ -64,7 +64,7 @@
           "message": "Тіло повідомлення у форматі простого тексту"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
-          "source": "Plain Text",
+          "source": "Plain text",
           "message": "Простий текст"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Тип вмісту MIME, який описує формат тіла повідомлення.\n\nВстановлення цього значення допомагає отримувачам зрозуміти, як інтерпретувати повідомлення. Поширені значення включають `text/plain` для простого тексту, `application/json` для структурованих даних і `application/octet-stream` для бінарного корисного навантаження."
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.display_name": {
-          "source": "Content Type",
+          "source": "Content type",
           "message": "Тип вмісту"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.short_desc": {
@@ -100,7 +100,7 @@
           "message": "Адреса AMQP (назва черги або теми), за якою буде опубліковано повідомлення.\n\nПовідомлення, надіслані в **чергу**, доставляються одному отримувачу (point-to-point). Повідомлення, надіслані в **тему**, доставляються всім передплатникам (publish-subscribe)."
         },
         "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.display_name": {
-          "source": "AMQP Address",
+          "source": "AMQP address",
           "message": "Адреса AMQP"
         },
         "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.short_desc": {
@@ -112,7 +112,7 @@
           "message": "Хеш настроюваних властивостей \"ключ-значення\", прикріплених до повідомлення.\n\nВикористовуйте властивості програми для додавання специфічних для бізнесу метаданих, таких як ID клієнтів, рівні пріоритету або прапорці обробки. Ці властивості можуть використовуватися отримувачами для фільтрації та маршрутизації."
         },
         "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.display_name": {
-          "source": "Application Properties",
+          "source": "Application properties",
           "message": "Властивості програми"
         },
         "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Тіло повідомлення для надсилання на адресу AMQP.\n\nМоже бути будь-якого типу, що серіалізується:\n- **Рядок**: простий текст або закодовані дані (JSON, XML, YAML)\n- **Хеш**: структуровані дані (автоматично кодуються як карта AMQP)\n- **Список**: впорядкована колекція\n- **Бінарні дані**: сирі бінарні дані\n- **Ціле число, число з плаваючою комою, логічне значення, дата**: скалярні значення"
         },
         "app.QU1RUA.action.c2VuZA.option.Ym9keQ.display_name": {
-          "source": "Message Body",
+          "source": "Message body",
           "message": "Тіло повідомлення"
         },
         "app.QU1RUA.action.c2VuZA.option.Ym9keQ.short_desc": {
@@ -160,7 +160,7 @@
           "message": "Адреса AMQP, куди слід надсилати відповіді на це повідомлення.\n\nВикористовується в шаблонах \"запит-відповідь\", щоб повідомити отримувача, куди надсилати відповідь."
         },
         "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.display_name": {
-          "source": "Reply-To Address",
+          "source": "Reply-to address",
           "message": "Адреса для відповіді"
         },
         "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.short_desc": {
@@ -176,7 +176,7 @@
           "message": "Відстежує вхідні повідомлення на вказаній адресі AMQP і викликає подію для кожного отриманого повідомлення.\n\nКожна подія включає повідомлення `body`, `content_type`, `message_id`, `correlation_id`, `reply_to`, `subject` та будь-які настроювані `application_properties`, встановлені відправником.\n\n**Використовуйте це для**:\n- Обробки замовлень у міру їх надходження в чергу\n- Реагування на сповіщення з теми\n- Запуску робочих процесів при отриманні інтеграційних повідомлень"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.display_name": {
-          "source": "Receive Messages",
+          "source": "Receive messages",
           "message": "Отримувати повідомлення"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.desc": {
@@ -184,7 +184,7 @@
           "message": "Адреса AMQP (назва черги або теми) для прослуховування вхідних повідомлень.\n\nПовідомлення доставляються як події щоразу, коли вони надходять на цю адресу."
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.display_name": {
-          "source": "AMQP Address",
+          "source": "AMQP address",
           "message": "Адреса AMQP"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.short_desc": {

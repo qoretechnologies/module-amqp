@@ -28,7 +28,7 @@
           "message": "AMQP操作の待機時間の最大値（ミリ秒単位）。\n\n高遅延ネットワークまたは負荷の高いブローカーでは、値を増やす。"
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.display_name": {
-          "source": "Operation Timeout",
+          "source": "Operation timeout",
           "message": "操作タイムアウト"
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.short_desc": {
@@ -56,7 +56,7 @@
           "message": "有効にすると、AMQP Management Protocol経由でブローカーに問い合わせ、利用可能なアドレスを自動的に検出する。\n\n**注意:** すべてのブローカーがこのプロトコルをサポートしているわけではない。"
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.display_name": {
-          "source": "Auto-Discover Addresses",
+          "source": "Auto-discover addresses",
           "message": "アドレスを自動検出"
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.short_desc": {

@@ -83,7 +83,7 @@ public class AmqpDataProvider inherits AbstractDataProvider {
                 "example_value": "orders,notifications,audit-log",
             },
             "use_management": <DataProviderOptionInfo>{
-                "display_name": "Auto-Discover Addresses",
+                "display_name": "Auto-discover addresses",
                 "short_desc": "Query the broker for available addresses",
                 "type": AbstractDataProviderType::get(SoftBoolType),
                 "desc": "When enabled, queries the broker via the AMQP Management Protocol "
@@ -122,7 +122,7 @@ public class AmqpDataProvider inherits AbstractDataProvider {
                 "sensitive": True,
             },
             "timeout_ms": <DataProviderOptionInfo>{
-                "display_name": "Operation Timeout",
+                "display_name": "Operation timeout",
                 "short_desc": "Timeout for AMQP operations in milliseconds",
                 "type": AbstractDataProviderType::get(SoftIntType),
                 "desc": "The maximum time in milliseconds to wait for AMQP operations "

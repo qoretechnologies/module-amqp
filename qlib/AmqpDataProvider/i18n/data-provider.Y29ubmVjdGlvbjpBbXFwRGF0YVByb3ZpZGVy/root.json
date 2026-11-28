@@ -28,8 +28,8 @@
           "message": "Comma-separated list of AMQP addresses (queues or topics) to expose as child data providers.\n\nEach address supports sending messages and receiving events."
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.display_name": {
-          "source": "Operation Timeout",
-          "message": "Operation Timeout"
+          "source": "Operation timeout",
+          "message": "Operation timeout"
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.short_desc": {
           "source": "Timeout for AMQP operations in milliseconds",
@@ -40,8 +40,8 @@
           "message": "Maximum time in milliseconds to wait for AMQP operations.\n\nIncrease for high-latency networks or heavily loaded brokers."
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.display_name": {
-          "source": "Auto-Discover Addresses",
-          "message": "Auto-Discover Addresses"
+          "source": "Auto-discover addresses",
+          "message": "Auto-discover addresses"
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.short_desc": {
           "source": "Query the broker for available addresses",

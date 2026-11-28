@@ -28,7 +28,7 @@
           "message": "Maximální doba čekání v milisekundách na operace AMQP.\n\nZvyšte pro sítě s vysokou latencí nebo zatížené brokery."
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.display_name": {
-          "source": "Operation Timeout",
+          "source": "Operation timeout",
           "message": "Časový limit operace"
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dGltZW91dF9tcw.short_desc": {
@@ -56,7 +56,7 @@
           "message": "Při povolení dotazuje broker prostřednictvím správního protokolu AMQP, aby automaticky zjistil dostupné adresy.\n\n**Poznámka:** ne všechny brokery tento protokol podporují."
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.display_name": {
-          "source": "Auto-Discover Addresses",
+          "source": "Auto-discover addresses",
           "message": "Automatické zjišťování adres"
         },
         "connection.QW1xcERhdGFQcm92aWRlcg.scheme.QW1xcERhdGFQcm92aWRlckNvbm5lY3Rpb24.option.dXNlX21hbmFnZW1lbnQ.short_desc": {

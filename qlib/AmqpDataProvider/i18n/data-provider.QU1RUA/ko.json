@@ -8,7 +8,7 @@
           "message": "지정한 AMQP 주소(큐 또는 토픽)로 메시지를 전송합니다.\n\n메시지 **body**는 필수 항목이며 문자열, 구조화된 데이터(해시/리스트), 바이너리 또는 스칼라 값 등 모든 유형이 될 수 있습니다. `content_type`(예: `application/json`)을(를) 사용하여 형식을 지정하십시오.\n\n**일반적인 시나리오**:\n- 주문 이벤트 전송: `content_type: application/json`이(가) 포함된 `{\"order_id\": 123, \"total\": 49.99}`\n- 알림 전송: `subject: alerts.inventory`이(가) 포함된 `\"Low inventory alert\"`\n- 바이너리 페이로드 전송: `content_type: application/octet-stream`이(가) 포함된 원시 파일 데이터\n\n응답은 브로커가 메시지를 **수락**했는지 여부를 나타냅니다."
         },
         "app.QU1RUA.action.c2VuZA.display_name": {
-          "source": "Send Message",
+          "source": "Send message",
           "message": "메시지 전송"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ.desc": {
@@ -64,7 +64,7 @@
           "message": "일반 텍스트 메시지 본문"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
-          "source": "Plain Text",
+          "source": "Plain text",
           "message": "일반 텍스트"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
@@ -76,7 +76,7 @@
           "message": "메시지 본문의 형식을 설명하는 MIME 콘텐츠 유형입니다.\n\n이 값을 설정하면 수신자가 메시지를 해석하는 방법을 파악하는 데 도움이 됩니다. 일반적인 값으로는 단순 텍스트의 경우 `text/plain`, 구조화된 데이터의 경우 `application/json`, 바이너리 페이로드의 경우 `application/octet-stream` 등이 있습니다."
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.display_name": {
-          "source": "Content Type",
+          "source": "Content type",
           "message": "콘텐츠 유형"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.short_desc": {
@@ -100,7 +100,7 @@
           "message": "메시지가 게시될 AMQP 주소(큐 또는 토픽 이름)입니다.\n\n**큐**로 전송된 메시지는 단일 소비자에게 전달됩니다(점대점). **토픽**으로 전송된 메시지는 모든 구독자에게 전달됩니다(발행-구독)."
         },
         "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.display_name": {
-          "source": "AMQP Address",
+          "source": "AMQP address",
           "message": "AMQP 주소"
         },
         "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.short_desc": {
@@ -112,7 +112,7 @@
           "message": "메시지에 첨부된 사용자 지정 키-값 속성의 해시입니다.\n\n애플리케이션 속성을 사용하여 고객 ID, 우선순위 수준 또는 처리 플래그와 같은 비즈니스 특화 메타데이터를 추가하세요. 이러한 속성은 소비자가 필터링 및 라우팅에 사용할 수 있습니다."
         },
         "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.display_name": {
-          "source": "Application Properties",
+          "source": "Application properties",
           "message": "애플리케이션 속성"
         },
         "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.short_desc": {
@@ -124,7 +124,7 @@
           "message": "AMQP 주소로 보낼 메시지 본문입니다.\n\n직렬화 가능한 모든 유형이 가능합니다:\n- **문자열**: 일반 텍스트 또는 인코딩된 데이터(JSON, XML, YAML)\n- **해시**: 구조화된 데이터(AMQP 맵으로 자동 인코딩됨)\n- **리스트**: 정렬된 컬렉션\n- **바이너리**: 원시 바이너리 데이터\n- **정수, 부동소수점, 불리언, 날짜**: 스칼라 값"
         },
         "app.QU1RUA.action.c2VuZA.option.Ym9keQ.display_name": {
-          "source": "Message Body",
+          "source": "Message body",
           "message": "메시지 본문"
         },
         "app.QU1RUA.action.c2VuZA.option.Ym9keQ.short_desc": {
@@ -160,7 +160,7 @@
           "message": "이 메시지에 대한 답신을 보내야 하는 AMQP 주소입니다.\n\n요청-응답 패턴에서 수신자에게 응답을 보낼 위치를 알려주는 데 사용됩니다."
         },
         "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.display_name": {
-          "source": "Reply-To Address",
+          "source": "Reply-to address",
           "message": "답신 수신 주소"
         },
         "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.short_desc": {
@@ -176,7 +176,7 @@
           "message": "지정된 AMQP 주소에서 수신되는 메시지를 감시하고 수신된 각 메시지에 대해 이벤트를 발생시킵니다.\n\n각 이벤트에는 메시지 `body`, `content_type`, `message_id`, `correlation_id`, `reply_to`, `subject` 및 발신자가 설정한 사용자 지정 `application_properties`이(가) 포함됩니다.\n\n**다음 용도로 사용**:\n- 큐에 도달하는 주문 처리\n- 토픽의 알림에 반응\n- 연동 메시지가 수신될 때 워크플로 트리거"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.display_name": {
-          "source": "Receive Messages",
+          "source": "Receive messages",
           "message": "메시지 수신"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.desc": {
@@ -184,7 +184,7 @@
           "message": "수신 메시지를 수신 대기할 AMQP 주소(큐 또는 토픽 이름)입니다.\n\n메시지가 이 주소에 도착할 때마다 이벤트로 전달됩니다."
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.display_name": {
-          "source": "AMQP Address",
+          "source": "AMQP address",
           "message": "AMQP 주소"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.short_desc": {

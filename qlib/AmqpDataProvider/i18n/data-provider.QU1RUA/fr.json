@@ -8,7 +8,7 @@
           "message": "Envoie un message à l'adresse AMQP spécifiée (file d'attente ou sujet).\n\nLe **corps** du message est requis et peut être de n'importe quel type — une chaîne, des données structurées (hachage/liste), du binaire ou une valeur scalaire. Utilisez `content_type` pour indiquer le format (par ex. `application/json`).\n\n**Scénarios courants** :\n- Envoyer un événement de commande : `{\"order_id\": 123, \"total\": 49.99}` avec `content_type: application/json`\n- Envoyer une notification : `\"Low inventory alert\"` avec `subject: alerts.inventory`\n- Envoyer une charge utile binaire : données de fichier brutes avec `content_type: application/octet-stream`\n\nLa réponse indique si le courtier a **accepté** le message."
         },
         "app.QU1RUA.action.c2VuZA.display_name": {
-          "source": "Send Message",
+          "source": "Send message",
           "message": "Envoyer un message"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ.desc": {
@@ -64,7 +64,7 @@
           "message": "Corps du message en texte brut"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
-          "source": "Plain Text",
+          "source": "Plain text",
           "message": "Texte brut"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Le type de contenu MIME décrivant le format du corps du message.\n\nDéfinir cette option aide les consommateurs à savoir comment interpréter le message. Les valeurs courantes incluent `text/plain` pour du texte simple, `application/json` pour des données structurées et `application/octet-stream` pour des charges utiles binaires."
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.display_name": {
-          "source": "Content Type",
+          "source": "Content type",
           "message": "Type de contenu"
         },
         "app.QU1RUA.action.c2VuZA.option.Y29udGVudF90eXBl.short_desc": {
@@ -100,7 +100,7 @@
           "message": "L'adresse AMQP (nom de la file d'attente ou du sujet) où le message sera publié.\n\nLes messages envoyés à une **file d'attente** sont distribués à un seul consommateur (point à point). Les messages envoyés à un **sujet** sont distribués à tous les abonnés (publication-abonnement)."
         },
         "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.display_name": {
-          "source": "AMQP Address",
+          "source": "AMQP address",
           "message": "Adresse AMQP"
         },
         "app.QU1RUA.action.c2VuZA.option.YWRkcmVzcw.short_desc": {
@@ -112,7 +112,7 @@
           "message": "Un hachage de propriétés clé-valeur personnalisées jointes au message.\n\nUtilisez les propriétés d'application pour ajouter des métadonnées spécifiques à l'entreprise, telles que des identifiants clients, des niveaux de priorité ou des indicateurs de traitement. Ces propriétés peuvent être utilisées par les consommateurs pour le filtrage et l'acheminement."
         },
         "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.display_name": {
-          "source": "Application Properties",
+          "source": "Application properties",
           "message": "Propriétés d'application"
         },
         "app.QU1RUA.action.c2VuZA.option.YXBwbGljYXRpb25fcHJvcGVydGllcw.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Le corps du message à envoyer à l'adresse AMQP.\n\nPeut être n'importe quel type sérialisable :\n- **String** : texte brut ou données encodées (JSON, XML, YAML)\n- **Hash** : données structurées (automatiquement encodées sous forme de carte AMQP)\n- **List** : collection ordonnée\n- **Binary** : données binaires brutes\n- **Integer, float, boolean, date** : valeurs scalaires"
         },
         "app.QU1RUA.action.c2VuZA.option.Ym9keQ.display_name": {
-          "source": "Message Body",
+          "source": "Message body",
           "message": "Corps du message"
         },
         "app.QU1RUA.action.c2VuZA.option.Ym9keQ.short_desc": {
@@ -160,7 +160,7 @@
           "message": "L'adresse AMQP à laquelle les réponses à ce message doivent être envoyées.\n\nUtilisé dans les schémas requête-réponse pour indiquer au destinataire où envoyer la réponse."
         },
         "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.display_name": {
-          "source": "Reply-To Address",
+          "source": "Reply-to address",
           "message": "Adresse de réponse"
         },
         "app.QU1RUA.action.c2VuZA.option.cmVwbHlfdG8.short_desc": {
@@ -176,7 +176,7 @@
           "message": "Observe les messages entrants sur l'adresse AMQP spécifiée et déclenche un événement pour chaque message reçu.\n\nChaque événement inclut le message `body`, `content_type`, `message_id`, `correlation_id`, `reply_to`, `subject`, ainsi que toute option `application_properties` personnalisée définie par l'expéditeur.\n\n**Utilisez ceci pour** :\n- Traiter les commandes au fur et à mesure qu'elles arrivent dans une file d'attente\n- Réagir aux notifications d'un sujet\n- Déclencher des flux de travail lorsque des messages d'intégration sont reçus"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.display_name": {
-          "source": "Receive Messages",
+          "source": "Receive messages",
           "message": "Recevoir des messages"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.desc": {
@@ -184,7 +184,7 @@
           "message": "L'adresse AMQP (nom de la file d'attente ou du sujet) à écouter pour les messages entrants.\n\nLes messages sont distribués sous forme d'événements dès qu'ils arrivent à cette adresse."
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.display_name": {
-          "source": "AMQP Address",
+          "source": "AMQP address",
           "message": "Adresse AMQP"
         },
         "app.QU1RUA.action.cmVjZWl2ZQ.option.YWRkcmVzcw.short_desc": {

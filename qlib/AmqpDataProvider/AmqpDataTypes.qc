@@ -28,7 +28,7 @@ public namespace AmqpDataProvider {
 #! Common allowed content type values
 public const ContentTypeAllowedValues = (
     <AllowedValueInfo>{
-        "display_name": "Plain Text",
+        "display_name": "Plain text",
         "short_desc": "UTF-8 plain text",
         "desc": "Plain text message body",
         "value": "text/plain",
@@ -93,7 +93,7 @@ public class AmqpSendRequestDataType inherits DataProvider::HashDataType {
         #! Field definitions
         const Fields = {
             "body": {
-                "display_name": "Message Body",
+                "display_name": "Message body",
                 "short_desc": "The message payload to send",
                 "desc": "The message body to send to the AMQP address.\n\n"
                     "Can be any serializable type:\n"
@@ -107,7 +107,7 @@ public class AmqpSendRequestDataType inherits DataProvider::HashDataType {
                 "example_value": "Hello, World!",
             },
             "content_type": {
-                "display_name": "Content Type",
+                "display_name": "Content type",
                 "short_desc": "MIME type of the message body",
                 "desc": "The MIME content type describing the format of the message body.\n\n"
                     "Setting this helps consumers know how to interpret the message. "
@@ -139,7 +139,7 @@ public class AmqpSendRequestDataType inherits DataProvider::HashDataType {
                 "example_value": "req-12345",
             },
             "reply_to": {
-                "display_name": "Reply-To Address",
+                "display_name": "Reply-to address",
                 "short_desc": "Address for reply messages",
                 "desc": "The AMQP address where replies to this message should be sent.\n\n"
                     "Used in request-reply patterns to tell the receiver where to "
@@ -158,7 +158,7 @@ public class AmqpSendRequestDataType inherits DataProvider::HashDataType {
                 "example_value": "orders.new",
             },
             "application_properties": {
-                "display_name": "Application Properties",
+                "display_name": "Application properties",
                 "short_desc": "Custom key-value metadata",
                 "desc": "A hash of custom key-value properties attached to the message.\n\n"
                     "Use application properties to add business-specific metadata "
@@ -192,7 +192,7 @@ public class AmqpSendResponseDataType inherits DataProvider::HashDataType {
                 "example_value": True,
             },
             "state": {
-                "display_name": "Delivery State",
+                "display_name": "Delivery state",
                 "short_desc": "Broker's disposition of the message",
                 "desc": "The delivery outcome reported by the broker:\n"
                     "- `accepted`: message was accepted and will be delivered\n"
@@ -218,7 +218,7 @@ public class AmqpMessageEventDataType inherits DataProvider::HashDataType {
         #! Field definitions
         const Fields = {
             "body": {
-                "display_name": "Message Body",
+                "display_name": "Message body",
                 "short_desc": "The received message payload",
                 "desc": "The body of the received message.\n\n"
                     "The type depends on what the sender sent — it may be a string, "
@@ -228,7 +228,7 @@ public class AmqpMessageEventDataType inherits DataProvider::HashDataType {
                 "example_value": "Hello, AMQP!",
             },
             "content_type": {
-                "display_name": "Content Type",
+                "display_name": "Content type",
                 "short_desc": "MIME type of the message body",
                 "desc": "The MIME content type of the received message body, if set by "
                     "the sender.\n\n"
@@ -255,7 +255,7 @@ public class AmqpMessageEventDataType inherits DataProvider::HashDataType {
                 "example_value": "req-12345",
             },
             "reply_to": {
-                "display_name": "Reply-To Address",
+                "display_name": "Reply-to address",
                 "short_desc": "Address for sending replies",
                 "desc": "The address where the sender expects replies to be sent.",
                 "type": AbstractDataProviderTypeMap."*string",
@@ -270,7 +270,7 @@ public class AmqpMessageEventDataType inherits DataProvider::HashDataType {
                 "example_value": "orders.new",
             },
             "application_properties": {
-                "display_name": "Application Properties",
+                "display_name": "Application properties",
                 "short_desc": "Custom key-value metadata from the sender",
                 "desc": "Custom application-defined properties attached to the message "
                     "by the sender.\n\n"
