@@ -142,7 +142,8 @@ public class AmqpDataProviderTest inherits QUnit::Test {
             AmqpTestRefusingObserver obs(deliveries, "r1", 2);
             AmqpEventDataProvider evt = startEvents(client, addr, obs);
             on_exit evt.stopEvents();
-            assertTrue(evt.getInfo().supports_refusal_redelivery);
+            # consumers can rely on the redelivery of a refused message (qore#7560)
+            assertTrue(evt.getInfo().supports_refusal_redelivery, "the provider reports the redelivery of refusals");
             list<hash<auto>> seen = map getDelivery(deliveries, "delivery " + $1), xrange(3);
             assertEq(("r1", "r1", "r1"), (map $1.body, seen), "the refused message is delivered again");
             assertEq((True, True, False), (map $1.refused, seen));
@@ -244,6 +245,12 @@ public class AmqpDataProviderTest inherits QUnit::Test {
         assertEq(True, info.supports_children);
         assertEq(True, info.children_can_support_apis);
         assertEq(True, info.children_can_support_observers);
+        # only the event provider redelivers a refused message (qore#7560)
+        assertFalse(info.supports_refusal_redelivery, "the root provider has no events to redeliver");
+        assertFalse(AmqpAddressDataProvider::ProviderInfo.supports_refusal_redelivery,
+            "the address provider has no events to redeliver");
+        assertTrue(AmqpEventDataProvider::ProviderInfo.supports_refusal_redelivery,
+            "the event provider redelivers a refused message");
     }
 
     testRequestTypeFields() {
