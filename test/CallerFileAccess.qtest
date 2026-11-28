@@ -1,0 +1,221 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+
+%requires QUnit
+%requires Util
+%requires amqp
+%requires AmqpUtil
+
+%exec-class CallerFileAccessTest
+
+#! Tests that the TLS files of an AMQP connection are refused for code restricted from the file system (module-amqp#10)
+/** The module's code runs with its own Program's options, so the TLS certificate and key files that the \c ssl options
+    name are refused with PERMISSION-DENIED when the connection is created if the creating code is restricted from the
+    file system (PO_NO_FILESYSTEM), also when it creates the connection through AmqpUtil's AmqpClient, before anything
+    is read or connected to; a sandbox that denies the file system by default refuses the files with its policy when
+    the connection is opened.  A connection that the host created with files and lent to restricted code keeps the
+    host's files (a sandbox's file-system policy still applies to them).  Options without files work for restricted
+    code, and unrestricted code uses the files.
+
+    No broker is needed: the connections are made to a port where nothing listens, so the code that may use the files
+    gets a connection error.
+*/
+class CallerFileAccessTest inherits QUnit::Test {
+    private {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        #! the URL of a port where nothing listens
+        const NoBroker = "amqps://127.0.0.1:1";
+
+        const Source = "%modern
+%requires amqp
+%requires AmqpUtil
+
+# runs the given use and returns \"ok\" or the error
+string sub run(code c) {
+    try {
+        c();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+hash<AmqpConnectionOptions> sub get_options(string url, *hash<auto> ssl) {
+    hash<AmqpConnectionOptions> opts({\"url\": url});
+    if (ssl) {
+        opts.ssl = cast<hash<AmqpSslOptions>>(ssl);
+    }
+    return opts;
+}
+
+# creates a connection
+string sub create(string url, *hash<auto> ssl) {
+    return run(sub () { AmqpConnection conn(get_options(url, ssl)); });
+}
+
+# creates a connection and connects
+string sub connect(string url, *hash<auto> ssl) {
+    return run(sub () {
+        AmqpConnection conn(get_options(url, ssl));
+        conn.connect();
+    });
+}
+
+# creates a client and connects
+string sub client(string url, *hash<auto> ssl) {
+    return run(sub () {
+        AmqpClient c(get_options(url, ssl));
+        c.connect();
+    });
+}
+
+# creates a client from a URL and options and connects
+string sub client_url(string url, *hash<auto> ssl) {
+    return run(sub () {
+        AmqpClient c(url, ssl ? {\"ssl\": cast<hash<AmqpSslOptions>>(ssl)} : NOTHING);
+        c.connect();
+    });
+}
+
+# connects a connection that the host created
+string sub lent_connect(AmqpConnection conn) {
+    return run(sub () { conn.connect(); });
+}
+";
+    }
+
+    private {
+        #! the test directory
+        string dir;
+        #! a file that is not a valid certificate or key file
+        string file;
+    }
+
+    constructor() : QUnit::Test("CallerFileAccess", "1.0", \ARGV) {
+        foreach string mode in (keys Modes) {
+            string m = mode;
+            addTestCase("TLS files, " + m, sub () { testFiles(m); });
+            addTestCase("lent connections, " + m, sub () { testLent(m); });
+            addTestCase("options without files, " + m, sub () { testNoFiles(m); });
+        }
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        string tmp = tmp_location() + DirSep + "qore-amqp-caller-file-access-" + get_random_string(8);
+        mkdir(tmp);
+        dir = realpath(tmp);
+        file = dir + DirSep + "file.pem";
+        File f();
+        f.open2(file, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("not a certificate or key file\n");
+        f.close();
+    }
+
+    globalTearDown() {
+        if (dir.val()) {
+            unlink(file);
+            rmdir(dir);
+        }
+    }
+
+    #! returns the ssl options with files: description, options
+    private list<list<auto>> getFileOptions(string path) {
+        return (
+            ("ca_cert", {"ca_cert": path}),
+            ("client_cert and client_key", {"client_cert": path, "client_key": path}),
+            ("client_cert", {"client_cert": path}),
+            ("client_key", {"client_key": path}),
+        );
+    }
+
+    #! the files of restricted code are refused before they are used; unrestricted code uses them
+    private testFiles(string mode) {
+        foreach list<auto> o in (getFileOptions(file)) {
+            foreach string func in ("create", "connect", "client", "client_url") {
+                string desc = sprintf("%s %s %s", func, o[0], mode);
+                assertEq("PERMISSION-DENIED", getProgram("nofs", mode).callFunction(func, NoBroker, o[1]),
+                    "nofs " + desc);
+                # an amqp:// connection does not read the files, but they are refused too
+                assertEq("PERMISSION-DENIED", getProgram("nofs", mode).callFunction(func, "amqp://127.0.0.1:1", o[1]),
+                    "nofs amqp:// " + desc);
+            }
+            foreach string func in ("connect", "client", "client_url") {
+                string desc = sprintf("%s %s %s", func, o[0], mode);
+                # the sandbox's file-system policy refuses the files when the connection is opened; an incomplete
+                # client identity is refused before the files are checked
+                assertEq(o[1].size() == 1 && !o[1].ca_cert ? "AMQP-CONNECTION-ERROR" : "FILESYSTEM-ACCESS-DENIED",
+                    getProgram("sandbox", mode).callFunction(func, NoBroker, o[1]), "sandbox " + desc);
+                # unrestricted code gets past the files: they cannot be loaded, or the identity is incomplete, or no
+                # broker is there
+                assertEq("AMQP-CONNECTION-ERROR", getProgram("unrestricted", mode).callFunction(func, NoBroker,
+                    o[1]), "unrestricted " + desc);
+            }
+        }
+        # any value that is set is checked
+        foreach string path in ("", "0") {
+            foreach list<auto> o in (getFileOptions(path)) {
+                assertEq("PERMISSION-DENIED", getProgram("nofs", mode).callFunction("create", NoBroker, o[1]),
+                    sprintf("nofs %s %y %s", o[0], path, mode));
+            }
+        }
+    }
+
+    #! a connection that the host created keeps the host's files for the code that it was lent to
+    /** The file-system policy of a sandbox that governs the code that connects still applies to them
+    */
+    private testLent(string mode) {
+        foreach string kind in ("nofs", "sandbox", "unrestricted") {
+            AmqpConnection conn(<AmqpConnectionOptions>{
+                "url": NoBroker,
+                "ssl": <AmqpSslOptions>{"ca_cert": file},
+            });
+            # the host's file is used: it cannot be loaded, or no broker is there
+            assertEq(kind == "sandbox" ? "FILESYSTEM-ACCESS-DENIED" : "AMQP-CONNECTION-ERROR",
+                getProgram(kind, mode).callFunction("lent_connect", conn), sprintf("%s lent %s", kind, mode));
+        }
+    }
+
+    #! options without files work for restricted code
+    private testNoFiles(string mode) {
+        foreach string kind in ("nofs", "sandbox") {
+            foreach string func in ("connect", "client", "client_url") {
+                assertEq("AMQP-CONNECTION-ERROR", getProgram(kind, mode).callFunction(func, NoBroker,
+                    {"verify": False}), sprintf("%s %s %s", kind, func, mode));
+            }
+            assertEq("ok", getProgram(kind, mode).callFunction("create", NoBroker), sprintf("%s create %s", kind,
+                mode));
+        }
+    }
+
+    #! returns a Program of the given kind
+    private Program getProgram(string kind, string mode) {
+        Program p;
+        switch (kind) {
+            case "nofs":
+                p = new Program(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+                break;
+            case "sandbox": {
+                SandboxManager sm();
+                sm.setFilesystemDefaultPolicy(False);
+                # the network check comes first when a connection is opened
+                sm.addNetworkAllowedIPRange("127.0.0.1/32");
+                p = new Program(PO_NEW_STYLE);
+                p.setSandboxManager(sm);
+                break;
+            }
+            default:
+                p = new Program(PO_NEW_STYLE);
+                break;
+        }
+        p.setExecMode(Modes{mode});
+        p.parse(Source, kind);
+        return p;
+    }
+}

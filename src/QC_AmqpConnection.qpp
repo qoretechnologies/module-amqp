@@ -292,6 +292,8 @@ qclass AmqpConnection [arg=QoreAmqpConnection* conn; ns=Qore::Amqp; dom=NETWORK]
 /** @param options connection options including the broker URL
 
     @throw AMQP-CONNECTION-ERROR if the options are invalid
+    @throw PERMISSION-DENIED the \c ssl options name a file and the calling code is restricted from the
+    \c FILESYSTEM functional domain (see @ref amqp_caller_paths)
 
     @par Example:
     @code{.py}

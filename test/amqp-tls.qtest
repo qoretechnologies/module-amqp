@@ -110,9 +110,10 @@ sub connectWithFiles(bool client) {
     }
 
     testNoFilesystem() {
+        # the files are refused when the connection is created (see CallerFileAccess.qtest)
         Program p = makeRestrictedProgram(PO_NO_FILESYSTEM);
-        assertThrows("FILESYSTEM-ACCESS-DENIED", sub() { p.callFunction("connectWithFiles", False); });
-        assertThrows("FILESYSTEM-ACCESS-DENIED", sub() { p.callFunction("connectWithFiles", True); });
+        assertThrows("PERMISSION-DENIED", sub() { p.callFunction("connectWithFiles", False); });
+        assertThrows("PERMISSION-DENIED", sub() { p.callFunction("connectWithFiles", True); });
     }
 
     private connectWith(hash<AmqpSslOptions> ssl, *string url, *string virtual_host) {
